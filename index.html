@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stacks — Digital Library System</title>
+<meta name="description" content="A self-contained digital library system: catalog, search, collections, loans, holds, and import/export. All data stays in your browser.">
+<script>
+/* If this page is inside a sandboxed preview frame or opened via file://, storage may be blocked.
+   Show a one-time notice so it is clear where to run the app for real. */
+(function(){
+  var blocked = false;
+  try { localStorage.setItem('__stacks_probe','1'); localStorage.removeItem('__stacks_probe'); } catch(e){ blocked = true; }
+  var framed = false; try { framed = window.self !== window.top; } catch(e){ framed = true; }
+  if(!blocked && !framed) return;
+  document.addEventListener('DOMContentLoaded', function(){
+    var n = document.createElement('div');
+    n.id = 'envNotice';
+    n.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start;max-width:940px;margin:0 auto">'
+      + '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 18px;margin-top:2px"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 16h.01"/></svg>'
+      + '<div><b>' + (blocked ? 'Preview note: changes will not be saved here' : 'You are viewing a preview frame') + '</b>'
+      + '<div style="margin-top:2px;line-height:1.45">This copy runs in a restricted frame, so browser storage may be blocked. '
+      + 'For everyday use, open <code>index.html</code> in a normal browser tab (or use the local server link). '
+      + 'Export a backup from <b>Export &amp; backup</b> to keep your data.</div></div>'
+      + '<button onclick="this.parentNode.parentNode.remove()" style="margin-left:auto;border:0;background:none;color:inherit;font-size:18px;cursor:pointer;line-height:1">&times;</button></div>';
+    n.style.cssText = 'position:sticky;top:0;z-index:200;background:var(--gold-soft);color:var(--warn);border-bottom:1px solid color-mix(in srgb,var(--warn) 25%, transparent);font:13px/1.4 var(--sans);padding:9px 14px';
+    document.body.insertBefore(n, document.body.firstChild);
+  });
+})();
+</script>
+<style>
+/* ============ tokens ============ */
+:root{
+  --bg:#f5f3ee; --bg2:#efece4; --surface:#ffffff; --surface2:#faf9f6;
+  --ink:#1d2b27; --ink2:#3d4f49; --muted:#6d7d77; --line:#e2ded3; --line2:#efecE3;
+  --accent:#0e6b5b; --accent-ink:#ffffff; --accent-soft:#e4f0ec; --accent-line:#bfdbd3;
+  --gold:#a97d24; --gold-soft:#f7eed8;
+  --danger:#b23b3b; --danger-soft:#fae9e7;
+  --warn:#9a6414; --warn-soft:#fbf0dc;
+  --ok:#2f6f4f; --ok-soft:#e7f2ea;
+  --shadow:0 1px 2px rgba(24,38,33,.05), 0 6px 20px -12px rgba(24,38,33,.18);
+  --shadow-lg:0 24px 60px -24px rgba(24,38,33,.35), 0 2px 8px rgba(24,38,33,.06);
+  --r:14px; --r-sm:10px; --r-xs:7px;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --bg:#121815; --bg2:#0d1210; --surface:#18211d; --surface2:#1d2723;
+  --ink:#eaf1ed; --ink2:#c6d3cd; --muted:#93a49d; --line:#2a3733; --line2:#233029;
+  --accent:#3fb79c; --accent-ink:#08130f; --accent-soft:#1b2f29; --accent-line:#2e5148;
+  --gold:#d9b063; --gold-soft:#2a2415;
+  --danger:#e2857c; --danger-soft:#2e1c1a;
+  --warn:#e0b070; --warn-soft:#2b2317;
+  --ok:#77c79b; --ok-soft:#172a20;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px -14px rgba(0,0,0,.6);
+  --shadow-lg:0 28px 70px -28px rgba(0,0,0,.8), 0 2px 10px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+svg{width:18px;height:18px;flex:0 0 auto}
+html,body{height:100%}
+body{
+  margin:0; background:linear-gradient(180deg,var(--bg) 0%, var(--bg) 40%, var(--bg2) 100%);
+  color:var(--ink); font-family:var(--sans); font-size:14.5px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+::selection{background:var(--accent-soft); color:var(--accent)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ============ layout ============ */
+.shell{display:grid; grid-template-columns:246px 1fr; min-height:100vh}
+.sidebar{
+  border-right:1px solid var(--line); background:var(--surface2);
+  padding:20px 14px 18px; display:flex; flex-direction:column; gap:6px;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.brand{display:flex; align-items:center; gap:10px; padding:4px 8px 16px; text-decoration:none; color:inherit}
+.brand-mark{width:34px;height:34px;flex:0 0 34px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:var(--shadow)}
+.brand-mark svg{width:20px;height:20px}
+.brand-name{font-family:var(--serif); font-size:19px; letter-spacing:.2px; line-height:1.05; display:block}
+.brand-sub{font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:block; margin-top:2px}
+.navlabel{font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); padding:14px 10px 6px}
+.nav-item{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  background:none; border:0; padding:9px 10px; border-radius:var(--r-sm); color:var(--ink2);
+  font-size:14px; font-weight:500; transition:background .13s, color .13s;
+}
+.nav-item svg{width:17px;height:17px;flex:0 0 17px;opacity:.75}
+.nav-item:hover{background:var(--surface); color:var(--ink)}
+.nav-item.active{background:var(--accent-soft); color:var(--accent); font-weight:650}
+.nav-item.active svg{opacity:1}
+.nav-item .count{margin-left:auto; font-size:11.5px; font-weight:600; color:var(--muted); background:var(--surface); border:1px solid var(--line); padding:1px 6px; border-radius:20px; min-width:22px; text-align:center}
+.nav-item.active .count{color:var(--accent); border-color:var(--accent-line); background:transparent}
+.sidebar-foot{margin-top:auto; padding:12px 8px 0; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px}
+.storage-note{font-size:11.5px; color:var(--muted); display:flex; gap:6px; align-items:flex-start; line-height:1.4}
+.storage-note svg{width:13px;height:13px;flex:0 0 13px;margin-top:2px;opacity:.8}
+
+.main{min-width:0; display:flex; flex-direction:column}
+.topbar{
+  position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:12px;
+  padding:14px clamp(14px,3vw,30px); background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+}
+.search-wrap{position:relative; flex:1 1 auto; min-width:0; max-width:560px}
+.search-wrap svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px;height:16px; color:var(--muted)}
+#search{
+  width:100%; padding:10px 74px 10px 36px; border-radius:11px; border:1px solid var(--line);
+  background:var(--surface); box-shadow:var(--shadow); font-size:14px;
+}
+#search:focus{outline:2px solid var(--accent-line); outline-offset:1px; border-color:var(--accent-line)}
+.kbd{font-family:var(--mono); font-size:10.5px; color:var(--muted); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 5px; background:var(--surface2); position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none}
+.top-actions{display:flex; align-items:center; gap:8px; margin-left:auto}
+.content{padding:clamp(16px,3vw,30px); padding-bottom:60px; width:100%; max-width:1400px; margin:0 auto; flex:1}
+
+/* ============ primitives ============ */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  padding:8px 13px; border-radius:var(--r-sm); font-size:13.5px; font-weight:600;
+  box-shadow:var(--shadow); transition:transform .08s, background .13s, border-color .13s; white-space:nowrap;
+}
+.btn svg{width:15px;height:15px}
+.btn:hover{border-color:var(--accent-line); background:var(--surface2)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+.btn.primary:hover{background:color-mix(in srgb, var(--accent) 88%, #000)}
+.btn.ghost{background:transparent; box-shadow:none; border-color:transparent; color:var(--ink2)}
+.btn.ghost:hover{background:var(--surface); border-color:var(--line)}
+.btn.danger{color:var(--danger); border-color:var(--line)}
+.btn.danger:hover{background:var(--danger-soft); border-color:var(--danger)}
+.btn.sm{padding:5px 9px; font-size:12.5px; border-radius:8px}
+.btn.sm svg{width:13px;height:13px}
+.btn.icon{padding:7px; width:34px; height:34px}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn.primary:disabled:hover{background:var(--accent)}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow)}
+.chip{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:650; letter-spacing:.01em; padding:2px 8px; border-radius:20px; border:1px solid transparent; white-space:nowrap}
+.chip.ok{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 22%, transparent)}
+.chip.warn{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 24%, transparent)}
+.chip.danger{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 24%, transparent)}
+.chip.info{background:var(--accent-soft); color:var(--accent); border-color:var(--accent-line)}
+.chip.mute{background:var(--surface2); color:var(--muted); border-color:var(--line)}
+.chip.gold{background:var(--gold-soft); color:var(--gold); border-color:color-mix(in srgb,var(--gold) 30%, transparent)}
+.chip .dot{width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block}
+.chip svg{width:11px;height:11px}
+.drop-zone svg{width:22px;height:22px;vertical-align:-4px;margin-right:4px}
+.kbd{font-family:var(--mono)}
+.tag{display:inline-block; font-size:11.5px; color:var(--muted); background:var(--surface2); border:1px solid var(--line2); padding:1px 7px; border-radius:6px}
+
+.page-head{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:18px}
+.page-title{font-family:var(--serif); font-size:clamp(23px,3.4vw,31px); line-height:1.15; margin:0 0 3px; letter-spacing:-.01em}
+.page-sub{margin:0; color:var(--muted); font-size:13.5px}
+.page-head .spacer{flex:1}
+.eyebrow{font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-bottom:8px}
+
+/* ============ dashboard ============ */
+.stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:12px; margin-bottom:20px}
+.stat{padding:15px 16px; border-radius:var(--r); background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); position:relative; overflow:hidden}
+.stat:before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent); opacity:.85}
+.stat.gold:before{background:var(--gold)} .stat.warn:before{background:var(--warn)} .stat.danger:before{background:var(--danger)}
+.stat-label{font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); font-weight:650}
+.stat-value{font-family:var(--serif); font-size:29px; line-height:1.15; margin-top:4px; letter-spacing:-.02em}
+.stat-foot{font-size:12px; color:var(--muted); margin-top:2px}
+.cols-2{display:grid; grid-template-columns:1.55fr 1fr; gap:18px; align-items:start}
+@media (max-width:960px){.cols-2{grid-template-columns:1fr}}
+.panel{padding:0; overflow:hidden}
+.panel-head{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line)}
+.panel-title{font-family:var(--serif); font-size:16.5px; margin:0; font-weight:600}
+.panel-head .spacer{flex:1}
+
+/* activity list */
+.feed{list-style:none; margin:0; padding:6px 0}
+.feed li{display:flex; gap:11px; padding:10px 16px; align-items:flex-start}
+.feed li+li{border-top:1px solid var(--line2)}
+.feed .glyph{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;flex:0 0 28px;background:var(--accent-soft);color:var(--accent)}
+.feed .glyph svg{width:14px;height:14px}
+.feed .glyph.warn{background:var(--warn-soft);color:var(--warn)}
+.feed .glyph.danger{background:var(--danger-soft);color:var(--danger)}
+.feed .what{font-size:13.5px; line-height:1.45}
+.feed .when{font-size:11.5px; color:var(--muted); margin-top:1px}
+
+/* collection tiles */
+.tile-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; align-items:stretch}
+.tile{position:relative; text-align:left; border-radius:var(--r); border:1px solid var(--line); background:var(--surface); padding:14px; box-shadow:var(--shadow); transition:transform .12s, box-shadow .12s, border-color .12s; overflow:hidden}
+.tile:hover{transform:translateY(-2px); box-shadow:var(--shadow-lg); border-color:var(--accent-line)}
+.tile .swatch{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff; margin-bottom:9px}
+.tile .swatch svg{width:17px;height:17px}
+.tile-name{font-weight:650; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tile-meta{font-size:12px; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* ============ filters ============ */
+.filterbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.select{position:relative; display:inline-flex}
+.select select{
+  appearance:none; padding:7px 30px 7px 11px; border-radius:var(--r-sm); border:1px solid var(--line);
+  background:var(--surface); font-size:13px; font-weight:550; box-shadow:var(--shadow); cursor:pointer;
+}
+.select svg{position:absolute; right:9px; top:50%; transform:translateY(-50%); width:13px;height:13px; pointer-events:none; color:var(--muted)}
+.filterbar .grow{flex:1}
+.result-count{font-size:12.5px; color:var(--muted); margin-left:auto; white-space:nowrap}
+
+/* ============ asset grid ============ */
+.asset-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(212px,1fr)); gap:14px}
+.asset{
+  position:relative; text-align:left; background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow); padding:0; display:flex; flex-direction:column;
+  transition:transform .13s, box-shadow .13s, border-color .13s;
+}
+.asset:hover{transform:translateY(-2px); box-shadow:var(--shadow-lg); border-color:var(--accent-line)}
+.cover{position:relative; aspect-ratio:4/3; background:var(--surface2); display:grid; place-items:center; overflow:hidden; border-bottom:1px solid var(--line2)}
+.cover img{width:100%;height:100%;object-fit:cover; display:block}
+.cover .ph{width:100%;height:100%;display:grid;place-items:center; background:
+   linear-gradient(135deg, color-mix(in srgb, var(--c,#0e6b5b) 13%, var(--surface)), color-mix(in srgb, var(--c,#0e6b5b) 5%, var(--surface)))}
+.cover .ph svg{width:44px;height:44px;color:var(--c,#0e6b5b);opacity:.55}
+.cover .fmt{position:absolute; top:8px; left:8px; font-size:10px; font-weight:800; letter-spacing:.08em; padding:2px 6px; border-radius:5px; background:color-mix(in srgb,var(--surface) 88%, transparent); border:1px solid var(--line); color:var(--ink2); backdrop-filter:blur(4px)}
+.cover .fav-ind{position:absolute; top:7px; right:8px; color:var(--gold)}
+.cover .fav-ind svg{width:14px;height:14px}
+.asset-body{padding:11px 12px 12px; display:flex; flex-direction:column; gap:5px; flex:1}
+.asset-title{font-size:13.5px; font-weight:650; line-height:1.32; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.asset-meta{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:18px}
+.asset-foot{margin-top:auto; padding-top:7px; display:flex; align-items:center; gap:6px}
+.asset-foot .chip{font-size:10.5px; padding:1px 6px}
+
+/* table */
+.table-wrap{overflow-x:auto}
+table.tbl{width:100%; border-collapse:collapse; font-size:13.5px}
+table.tbl th{
+  text-align:left; font-size:10.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted);
+  font-weight:700; padding:10px 12px; border-bottom:1px solid var(--line); background:var(--surface2); position:sticky; top:0; z-index:2;
+}
+table.tbl td{padding:10px 12px; border-bottom:1px solid var(--line2); vertical-align:middle}
+table.tbl tbody tr{cursor:pointer}
+table.tbl tbody tr:hover{background:var(--surface2)}
+table.tbl tbody tr:last-child td{border-bottom:0}
+.th-title{font-weight:600}
+.cell-sub{font-size:11.5px; color:var(--muted)}
+.nowrap{white-space:nowrap}
+.row-actions{display:flex; gap:4px; justify-content:flex-end}
+.tbl .row-actions{opacity:0; transition:opacity .12s}
+.tbl tbody tr:hover .row-actions, .tbl tbody tr:focus-within .row-actions{opacity:1}
+
+/* empty */
+.empty{padding:52px 24px; text-align:center; color:var(--muted)}
+.empty .big{width:52px;height:52px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 12px}
+.empty .big svg{width:24px;height:24px}
+.empty h3{margin:0 0 4px; font-family:var(--serif); font-size:18px; color:var(--ink)}
+.empty p{margin:0 auto 14px; max-width:380px; font-size:13.5px}
+.row{display:flex; gap:8px; justify-content:center; flex-wrap:wrap}
+
+/* ============ drawer ============ */
+.scrim{position:fixed; inset:0; background:rgba(15,25,22,.42); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .18s; z-index:60}
+.scrim.on{opacity:1; pointer-events:auto}
+.drawer{
+  position:fixed; top:0; right:0; height:100vh; width:min(520px,100vw); background:var(--surface);
+  border-left:1px solid var(--line); box-shadow:var(--shadow-lg); z-index:61;
+  transform:translateX(102%); transition:transform .24s cubic-bezier(.32,.72,.25,1); display:flex; flex-direction:column;
+}
+.drawer.on{transform:none}
+.drawer-head{display:flex; align-items:flex-start; gap:10px; padding:16px 16px 12px; border-bottom:1px solid var(--line)}
+.drawer-body{overflow:auto; padding:16px; flex:1}
+.drawer-foot{padding:12px 16px; border-top:1px solid var(--line); display:flex; gap:8px; flex-wrap:wrap; background:var(--surface2)}
+.d-title{font-family:var(--serif); font-size:20px; line-height:1.2; margin:0 0 3px}
+.d-sub{font-size:12.5px; color:var(--muted)}
+.detail-cover{border-radius:var(--r-sm); overflow:hidden; border:1px solid var(--line); margin-bottom:14px; aspect-ratio:16/9; background:var(--surface2)}
+.detail-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.detail-cover .ph{width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg,color-mix(in srgb,var(--c,#0e6b5b) 15%,var(--surface)),color-mix(in srgb,var(--c,#0e6b5b) 4%,var(--surface)))}
+.detail-cover .ph svg{width:52px;height:52px;color:var(--c);opacity:.5}
+dl.meta{display:grid; grid-template-columns:auto 1fr; gap:8px 14px; margin:0 0 16px; font-size:13px}
+dl.meta dt{color:var(--muted); font-size:12px; padding-top:1px}
+dl.meta dd{margin:0; font-weight:550; word-break:break-word}
+.note-box{background:var(--surface2); border:1px solid var(--line2); border-radius:var(--r-sm); padding:10px 12px; font-size:13px; white-space:pre-wrap; margin-bottom:14px}
+.section-label{font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:18px 0 8px}
+.timeline{list-style:none; margin:0; padding:0; font-size:13px}
+.timeline li{display:flex; gap:9px; padding:5px 0}
+.timeline .dot{width:6px;height:6px;border-radius:50%;background:var(--accent-line); margin-top:7px; flex:0 0 6px}
+.timeline .dot.on{background:var(--accent)}
+.timeline time{color:var(--muted); font-size:11.5px; display:block}
+
+/* ============ modal ============ */
+.modal{position:fixed; inset:0; z-index:70; display:grid; place-items:center; padding:16px; pointer-events:none}
+.modal.on{pointer-events:auto}
+.modal-card{
+  width:min(640px,100%); max-height:92vh; display:flex; flex-direction:column; background:var(--surface);
+  border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow-lg);
+  opacity:0; transform:translateY(10px) scale(.985); transition:opacity .16s, transform .16s;
+}
+.modal.on .modal-card{opacity:1; transform:none}
+.modal-card.wide{width:min(820px,100%)}
+.modal-head{display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--line)}
+.modal-head h2{font-family:var(--serif); font-size:19px; margin:0}
+.modal-body{padding:18px; overflow:auto}
+.modal-foot{padding:13px 18px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; background:var(--surface2); border-radius:0 0 18px 18px}
+.field{display:flex; flex-direction:column; gap:5px; margin-bottom:13px}
+.field label{font-size:12px; font-weight:650; color:var(--ink2); letter-spacing:.01em}
+.field .hint{font-size:11.5px; color:var(--muted); font-weight:400}
+input[type=text],input[type=url],input[type=date],input[type=number],textarea,select.inp{
+  width:100%; padding:9px 11px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--surface); font-size:13.5px;
+}
+input:focus,textarea:focus,select.inp:focus{outline:2px solid var(--accent-line); outline-offset:1px; border-color:var(--accent-line)}
+textarea{resize:vertical; min-height:76px}
+.form-grid{display:grid; grid-template-columns:1fr 1fr; gap:0 14px}
+.form-grid .full{grid-column:1/-1}
+@media (max-width:560px){.form-grid{grid-template-columns:1fr}}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden; background:var(--surface2)}
+.seg button{border:0; background:none; padding:6px 11px; font-size:12.5px; font-weight:600; color:var(--muted)}
+.seg button.on{background:var(--surface); color:var(--accent); box-shadow:var(--shadow)}
+.checkline{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:550; margin-bottom:13px}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent); width:15px; height:15px}
+.drop-zone{border:1.5px dashed var(--accent-line); border-radius:var(--r); padding:22px; text-align:center; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:13.5px; transition:background .13s}
+.drop-zone.hot{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); border-color:var(--accent)}
+.drop-zone .small{display:block; font-weight:400; color:var(--muted); font-size:12px; margin-top:3px}
+.code{font-family:var(--mono); font-size:12px; background:var(--surface2); border:1px solid var(--line2); border-radius:var(--r-sm); padding:10px; white-space:pre-wrap; word-break:break-word; max-height:200px; overflow:auto; margin:0}
+.import-summary{font-size:13px; padding:10px 12px; border-radius:var(--r-sm); background:var(--ok-soft); color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 22%,transparent); margin-bottom:12px}
+.import-summary.bad{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 22%,transparent)}
+
+/* toast */
+.toasts{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
+.toast{
+  display:flex; align-items:center; gap:9px; background:var(--ink); color:var(--bg);
+  padding:9px 14px; border-radius:11px; font-size:13px; font-weight:550; box-shadow:var(--shadow-lg);
+  animation:pop .22s ease-out; max-width:min(92vw,460px);
+}
+.toast svg{width:15px;height:15px;flex:0 0 15px}
+.toast.err{background:var(--danger)} .toast.err svg{color:#fff}
+@keyframes pop{from{opacity:0; transform:translateY(8px) scale(.97)}to{opacity:1; transform:none}}
+
+/* misc */
+.divider{height:1px;background:var(--line);margin:16px 0}
+.mini-chart{display:flex; align-items:flex-end; gap:5px; height:64px; padding:2px 0}
+.mini-chart .bar{flex:1; background:var(--accent-soft); border-radius:3px 3px 0 0; position:relative; min-height:3px; border:1px solid var(--accent-line); border-bottom:0}
+.mini-chart .bar span{position:absolute; bottom:-17px; left:50%; transform:translateX(-50%); font-size:9.5px; color:var(--muted)}
+.legend{display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:22px}
+.legend i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:5px}
+.mobile-only{display:none}
+@media (max-width:620px){
+  .hide-sm{display:none}
+  #exportQuick{display:none}
+  #addBtn{padding:8px 10px}
+  .page-head .btn[data-act="new-asset"]{display:none}
+  .asset-foot{flex-wrap:nowrap}
+  .asset-foot .tag{max-width:44%}
+  .topbar{gap:8px; padding:10px 12px}
+  .top-actions{gap:6px}
+  .content{padding-left:12px; padding-right:12px}
+  .asset-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:10px}
+  .asset-title{font-size:12.5px}
+  .asset-foot{flex-wrap:wrap}
+  .filterbar .result-count{margin-left:0}
+  .drawer-foot .btn{flex:1 1 auto; justify-content:center}
+}
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:fixed; inset:0 auto 0 0; width:250px; z-index:80; transform:translateX(-102%); transition:transform .22s; box-shadow:var(--shadow-lg)}
+  .sidebar.on{transform:none}
+  .mobile-only{display:inline-flex}
+  .kbd{display:none}
+}
+@media print{.sidebar,.topbar,.drawer,.modal,.scrim{display:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M19 18v3H6.5A2.5 2.5 0 0 1 4 18.5"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.6-7-9.4A4.1 4.1 0 0 1 12 7.6 4.1 4.1 0 0 1 19 10.6C19 15.4 12 20 12 20z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.5 13 21a2 2 0 0 1-2.8 0L3.5 14.3a2 2 0 0 1-.5-1.3V4.5A1.5 1.5 0 0 1 4.5 3h8.5a2 2 0 0 1 1.3.5l6.2 6.2a2 2 0 0 1 0 3.8z"/><circle cx="8" cy="8" r="1.4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 14H2.4a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 4.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 2.6V2.4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5L20 6.5"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 5.5 18.5 9.5"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.8A.8.8 0 0 1 9.8 4h4.4a.8.8 0 0 1 .8.8V7"/><path d="M6 7l1 12.2A1.8 1.8 0 0 0 8.8 21h6.4a1.8 1.8 0 0 0 1.8-1.8L18 7"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.5 5.5 5A2 2 0 0 1 7.4 3.5h9.2A2 2 0 0 1 18.5 5L21 13.5V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 13.5h4.5l1 2.5h7l1-2.5H21"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-3.2 7-9V5.8L12 3 5 5.8V12c0 5.8 7 9 7 9z"/><path d="m9 11.5 2 2 4-4"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.5 5.7"/><path d="M20 4.5V11h-6.5"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.8 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8L3.5 10l5.9-.9z"/></symbol>
+</defs></svg>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#" data-nav="dashboard">
+      <span class="brand-mark"><svg><use href="#i-book"/></svg></span>
+      <span><span class="brand-name">Stacks</span><span class="brand-sub" id="brandSub">Digital Library</span></span>
+    </a>
+    <button class="nav-item active" data-nav="dashboard"><svg><use href="#i-grid"/></svg>Dashboard</button>
+    <button class="nav-item" data-nav="assets"><svg><use href="#i-book"/></svg>Catalog<span class="count" data-count="assets">0</span></button>
+    <button class="nav-item" data-nav="collections"><svg><use href="#i-layers"/></svg>Collections<span class="count" data-count="collections">0</span></button>
+    <div class="navlabel">Manage</div>
+    <button class="nav-item" data-nav="import"><svg><use href="#i-upload"/></svg>Import</button>
+    <button class="nav-item" data-nav="export"><svg><use href="#i-download"/></svg>Export &amp; backup</button>
+    <button class="nav-item" data-nav="settings"><svg><use href="#i-settings"/></svg>Settings</button>
+    <div class="sidebar-foot">
+      <div class="storage-note"><svg><use href="#i-shield"/></svg><span>Everything is stored locally in this browser. Export a backup to move or keep it safe.</span></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="btn ghost icon mobile-only" id="menuBtn" title="Menu" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button>
+      <div class="search-wrap">
+        <svg><use href="#i-search"/></svg>
+        <input id="search" type="text" placeholder="Search titles, authors, tags, notes…" autocomplete="off" spellcheck="false" aria-label="Search library">
+        <span class="kbd">/</span>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg><use href="#i-moon"/></svg></button>
+        <button class="btn" id="exportQuick" title="Export data"><svg><use href="#i-download"/></svg><span class="hide-sm">Export</span></button>
+        <button class="btn primary" id="addBtn"><svg><use href="#i-plus"/></svg><span class="hide-sm">Add asset</span></button>
+      </div>
+    </header>
+    <main class="content" id="view" tabindex="-1"></main>
+  </div>
+</div>
+
+<!-- drawer (asset detail) -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="Asset details"></aside>
+
+<!-- modal host -->
+<div class="modal" id="modal"><div class="modal-card" id="modalCard"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+   Stacks — Digital Library System (single-file app)
+   All data stays in this browser via localStorage. Export JSON to back up.
+   ===================================================================== */
+const DB_KEY = 'stacks.db.v1';
+const SET_KEY = 'stacks.settings.v1';
+const LOAN = 14;
+
+const TYPES = [
+  { id:'book',      label:'Book',        color:'#8a5a2b', icon:'book' },
+  { id:'ebook',     label:'E-book',      color:'#0e6b5b', icon:'book' },
+  { id:'pdf',       label:'PDF',         color:'#b23b3b', icon:'doc' },
+  { id:'document',  label:'Document',    color:'#3d5a80', icon:'doc' },
+  { id:'article',   label:'Article',     color:'#5a6b7a', icon:'doc' },
+  { id:'video',     label:'Video',       color:'#7a3b8f', icon:'play' },
+  { id:'audio',     label:'Audio',       color:'#a35b2a', icon:'play' },
+  { id:'image',     label:'Image',       color:'#2f6f4f', icon:'image' },
+  { id:'dataset',   label:'Dataset',     color:'#4a6b12', icon:'grid' },
+  { id:'map',       label:'Map',         color:'#1f5f7a', icon:'grid' },
+  { id:'other',     label:'Other',       color:'#6d7d77', icon:'layers' }
+];
+const STATUSES = [
+  { id:'available', label:'Available' },
+  { id:'onloan',    label:'On loan' },
+  { id:'reference', label:'Reference only' },
+  { id:'missing',   label:'Missing' }
+];
+const COLORS = ['#0e6b5b','#8a5a2b','#3d5a80','#7a3b8f','#a35b2a','#2f6f4f','#b23b3b','#1f5f7a','#4a6b12','#6d7d77'];
+
+/* ---------- defaults ---------- */
+let db = { assets:[], collections:[], v:1 };
+let settings = { libraryName:'My Library', loanDays:LOAN, theme:'light', viewMode:'grid', created:todayISO() };
+let ui = { nav:'dashboard', q:'', type:'', status:'', collection:'', sort:'default', viewMode:'grid', drawer:null };
+
+/* ---------- tiny helpers ---------- */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const uid = p => (p||'a') + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2,7);
+const esc = v => String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ic = (name, cls='') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function isoAddDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function parseDate(s){ if(!s) return null; const d=new Date(s+'T00:00:00'); return isNaN(d)?null:d; }
+function fmtDate(s){
+  const d = parseDate(s); if(!d) return '—';
+  return d.toLocaleDateString(undefined,{ month:'short', day:'numeric', year:'numeric' });
+}
+function fmtDateShort(s){
+  const d = parseDate(s); if(!d) return '—';
+  return d.toLocaleDateString(undefined,{ month:'short', day:'numeric' });
+}
+function relDays(s){ // positive = future, negative = past
+  const d = parseDate(s); if(!d) return null;
+  const t = new Date(todayISO()+'T00:00:00');
+  return Math.round((d-t)/86400000);
+}
+function humanAgo(iso){
+  if(!iso) return '';
+  const then = new Date(iso).getTime(); if(isNaN(then)) return '';
+  const s = Math.max(0,(Date.now()-then)/1000);
+  if(s<60) return 'just now';
+  if(s<3600) return Math.floor(s/60)+' min ago';
+  if(s<86400) return Math.floor(s/3600)+' hr ago';
+  const d = Math.floor(s/86400);
+  if(d===1) return 'yesterday';
+  if(d<30) return d+' days ago';
+  if(d<365) return Math.floor(d/30)+' mo ago';
+  return Math.floor(d/365)+' yr ago';
+}
+function typeMeta(t){ return TYPES.find(x=>x.id===t) || TYPES[0]; }
+function collectionById(id){ return db.collections.find(c=>c.id===id) || null; }
+function fmtBytes(n){
+  if(!n) return '';
+  const u=['B','KB','MB','GB','TB']; let i=0, v=n;
+  while(v>=1024 && i<u.length-1){ v/=1024; i++; }
+  return (v>=10||i===0? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
+}
+function initials(s){ return (s||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '—'; }
+
+/* ---------- storage ---------- */
+let saveTimer=null;
+function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveNow,120); }
+function saveNow(){
+  try{
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    localStorage.setItem(SET_KEY, JSON.stringify(settings));
+  }catch(e){
+    toast('Could not save: storage may be full. Export a backup.', true);
+  }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(DB_KEY);
+    if(raw){ const p = JSON.parse(raw); db = { assets:Array.isArray(p.assets)?p.assets:[], collections:Array.isArray(p.collections)?p.collections:[], v:1 }; }
+    const rs = localStorage.getItem(SET_KEY);
+    if(rs){ settings = Object.assign(settings, JSON.parse(rs)); }
+  }catch(e){ console.warn('load failed', e); }
+  db.assets = db.assets.map(normalizeAsset);
+  ui.viewMode = settings.viewMode || 'grid';
+}
+
+/* ---------- asset helpers ---------- */
+function normalizeAsset(a){
+  const t = (a.type||'').toLowerCase();
+  return {
+    id: a.id || uid('as'),
+    title: (a.title||'Untitled').toString().trim().slice(0,300) || 'Untitled',
+    type: TYPES.some(x=>x.id===t) ? t : guessType(a),
+    creator: (a.creator||'').toString().trim().slice(0,200),
+    year: (a.year||'').toString().trim().slice(0,20),
+    tags: Array.isArray(a.tags) ? a.tags.map(String).map(s=>s.trim()).filter(Boolean).slice(0,40)
+          : String(a.tags||'').split(/[;,|]/).map(s=>s.trim()).filter(Boolean).slice(0,40),
+    collection: a.collection || '',
+    description: (a.description||'').toString().slice(0,4000),
+    url: (a.url||'').toString().trim().slice(0,2000),
+    file: a.file || '',
+    fileSize: a.fileSize || 0,
+    isbn: (a.isbn||'').toString().trim().slice(0,80),
+    status: STATUSES.some(s=>s.id===a.status) ? a.status : 'available',
+    holder: a.holder||'',
+    dueDate: a.dueDate||'',
+    favorite: !!a.favorite,
+    addedAt: a.addedAt || new Date().toISOString(),
+    updatedAt: a.updatedAt || a.addedAt || new Date().toISOString(),
+    history: Array.isArray(a.history) ? a.history.slice(-60) : [{ at:a.addedAt||new Date().toISOString(), action:'Added to library' }]
+  };
+}
+function guessType(a){
+  const s = ((a.url||'')+' '+(a.title||'')+' '+(a.file||'')).toLowerCase();
+  if(/\.pdf\b/.test(s)) return 'pdf';
+  if(/\.(epub|mobi|azw3)\b/.test(s)) return 'ebook';
+  if(/\.(mp4|mov|mkv|webm|avi)\b/.test(s)) return 'video';
+  if(/\.(mp3|wav|flac|m4a|ogg)\b/.test(s)) return 'audio';
+  if(/\.(png|jpe?g|gif|webp|tiff?|svg)\b/.test(s)) return 'image';
+  if(/\.(csv|xlsx?|json|tsv)\b/.test(s)) return 'dataset';
+  if(/\.(docx?|pptx?|txt|md|rtf)\b/.test(s)) return 'document';
+  return 'other';
+}
+function touch(a, action){
+  a.updatedAt = new Date().toISOString();
+  a.history = (a.history||[]).concat([{ at:a.updatedAt, action: action||'Updated' }]).slice(-60);
+}
+function isOverdue(a){
+  if(a.status!=='onloan' || !a.dueDate) return false;
+  return (relDays(a.dueDate) ?? 1) < 0;
+}
+function statusChip(a){
+  if(isOverdue(a)){
+    const d = Math.abs(relDays(a.dueDate));
+    return `<span class="chip danger"><i class="dot"></i>${d} day${d===1?'':'s'} overdue</span>`;
+  }
+  if(a.status==='onloan'){
+    const d = relDays(a.dueDate);
+    if(d!=null && d<=3) return `<span class="chip warn"><i class="dot"></i>Due in ${d} day${d===1?'':'s'}</span>`;
+    return `<span class="chip info"><i class="dot"></i>On loan</span>`;
+  }
+  if(a.status==='reference') return `<span class="chip mute"><i class="dot"></i>Reference</span>`;
+  if(a.status==='missing') return `<span class="chip danger"><i class="dot"></i>Missing</span>`;
+  return `<span class="chip ok"><i class="dot"></i>Available</span>`;
+}
+function statusChipTable(a){
+  if(a.status==='onloan' && !isOverdue(a)) return `<span class="chip gold"><i class="dot"></i>On loan</span>`;
+  return statusChip(a);
+}
+
+/* ---------- toast ---------- */
+function toast(msg, isErr){
+  const el = document.createElement('div');
+  el.className = 'toast' + (isErr?' err':'');
+  el.innerHTML = ic(isErr?'x':'check') + `<span>${esc(msg)}</span>`;
+  $('#toasts').appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(6px)'; el.style.transition='all .2s'; }, 2600);
+  setTimeout(()=> el.remove(), 2900);
+}
+
+/* ---------- icons for types ---------- */
+const SHAPES = {
+  book:'<path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H20v13H8.5A2.5 2.5 0 0 0 6 18.5z"/><path d="M20 16v4H8.5A2.5 2.5 0 0 1 6 17.5"/><path d="M10 7h6M10 10h4"/>',
+  doc:'<path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 16.5h5"/>',
+  play:'<circle cx="12" cy="12" r="8.5"/><path d="M10.5 8.8 15 12l-4.5 3.2z"/>',
+  image:'<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4.5 17 4.5-4.5 3.5 3.5 3-3 4 4"/>',
+  grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/>'
+};
+function typeShape(t){ return SHAPES[typeMeta(t).icon] || SHAPES.layers; }
+function typeSvg(t){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${typeShape(t)}</svg>`; }
+function coverHTML(a, cls){
+  const t = typeMeta(a.type);
+  if(a.url && /^https?:\/\//i.test(a.url) && /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(a.url)){
+    return `<img src="${esc(a.url)}" alt="" loading="lazy" style="background:color-mix(in srgb, ${t.color} 10%, var(--surface))" onerror="this.style.visibility='hidden'">`;
+  }
+  return `<div class="ph" style="--c:${t.color}">${typeSvg(a.type)}</div>`;
+}
+
+/* =====================================================================
+   FILTER / SORT
+   ===================================================================== */
+function matches(a, q){
+  if(!q) return true;
+  const hay = [a.title,a.creator,a.isbn,a.collection,a.description,a.url,(a.tags||[]).join(' '),typeMeta(a.type).label,
+               (collectionById(a.collection)||{}).name||''].join(' ').toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(w=>hay.includes(w));
+}
+function filtered(){
+  let list = db.assets.filter(a=>matches(a, ui.q.trim()));
+  if(ui.type) list = list.filter(a=>a.type===ui.type);
+  if(ui.collection) list = list.filter(a=>a.collection===ui.collection);
+  if(ui.status==='overdue') list = list.filter(isOverdue);
+  else if(ui.status) list = list.filter(a=>a.status===ui.status);
+  if(ui.favorite) list = list.filter(a=>a.favorite);
+  const sorters = {
+    default: (a,b)=> (b.addedAt||'').localeCompare(a.addedAt||''),
+    title:   (a,b)=> a.title.localeCompare(b.title),
+    creator: (a,b)=> (a.creator||'zzz').localeCompare(b.creator||'zzz'),
+    newest:  (a,b)=> (b.year||'').localeCompare(a.year||''),
+    due:     (a,b)=> (a.dueDate||'9999').localeCompare(b.dueDate||'9999')
+  };
+  return [...list].sort(sorters[ui.sort] || sorters.default);
+}
+
+/* =====================================================================
+   RENDER: SHELL + ROUTER
+   ===================================================================== */
+function render(){
+  $('#brandSub').textContent = settings.brandSub || 'Digital Library';
+  $$('[data-count="assets"]').forEach(e=> e.textContent = db.assets.length);
+  $$('[data-count="collections"]').forEach(e=> e.textContent = db.collections.length);
+  $$('.nav-item').forEach(b=> b.classList.toggle('active', b.dataset.nav===ui.nav));
+  document.documentElement.dataset.theme = settings.theme || 'light';
+  $('#themeBtn').innerHTML = ic((settings.theme==='dark')?'sun':'moon');
+  const v = $('#view');
+  const views = { dashboard:viewDashboard, assets:viewAssets, collections:viewCollections, import:viewImport, export:viewExport, settings:viewSettings };
+  v.innerHTML = (views[ui.nav]||viewDashboard)();
+  if(ui.nav==='assets'){ const s=$('#search'); if(document.activeElement!==s) s.value = ui.q; }
+  v.scrollTop = 0; window.scrollTo({top:0});
+}
+function go(nav, patch={}){
+  Object.assign(ui, {nav}, patch);
+  closeDrawer(); $('#sidebar').classList.remove('on');
+  render();
+}
+
+/* =====================================================================
+   VIEW: DASHBOARD
+   ===================================================================== */
+function viewDashboard(){
+  const total = db.assets.length;
+  const onloan = db.assets.filter(a=>a.status==='onloan').length;
+  const overdue = db.assets.filter(isOverdue).length;
+  const favs = db.assets.filter(a=>a.favorite).length;
+
+  if(!total) return welcomeEmpty();
+
+  // recent activity feed
+  const feed = [];
+  db.assets.forEach(a=>{
+    if(a.status==='onloan') feed.push({ at:a.updatedAt, icon:'clock', kind:'', text:`<b>${esc(a.title)}</b> is on loan${a.holder?` to ${esc(a.holder)}`:''}`, sub: a.dueDate?`Due ${fmtDate(a.dueDate)}`:'No due date' });
+    if(isOverdue(a)) feed.push({ at:a.updatedAt, icon:'clock', kind:'danger', text:`<b>${esc(a.title)}</b> is overdue`, sub:`Was due ${fmtDate(a.dueDate)}` });
+    feed.push({ at:a.addedAt, icon:'plus', kind:'', text:`Added <b>${esc(a.title)}</b>`, sub: typeMeta(a.type).label });
+  });
+  feed.sort((x,y)=> (y.at||'').localeCompare(x.at||''));
+  const recent = feed.slice(0,7);
+
+  // added-per-month bars (last 6 months)
+  const months=[]; const now=new Date();
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push({k:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, l:d.toLocaleDateString(undefined,{month:'short'}), n:0}); }
+  db.assets.forEach(a=>{ const k=(a.addedAt||'').slice(0,7); const m=months.find(x=>x.k===k); if(m) m.n++; });
+  const maxN = Math.max(1, ...months.map(m=>m.n));
+
+  const dueSoon = db.assets.filter(a=>a.status==='onloan' && !isOverdue(a) && (relDays(a.dueDate)??99)<=7).sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||'')).slice(0,5);
+  const colTiles = db.collections.slice(0,6).map(c=>{
+    const n = db.assets.filter(a=>a.collection===c.id).length;
+    return `<button class="tile" data-act="open-collection" data-id="${c.id}">
+      <span class="swatch" style="background:${esc(c.color||'#0e6b5b')}">${typeSvg('other')}</span>
+      <div class="tile-name">${esc(c.name)}</div>
+      <div class="tile-meta">${n} item${n===1?'':'s'}</div>
+    </button>`;
+  }).join('');
+
+  return `
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">${esc(settings.libraryName)}</div>
+      <h1 class="page-title">Library overview</h1>
+      <p class="page-sub">${total} item${total===1?'':'s'} catalogued · ${db.collections.length} collection${db.collections.length===1?'':'s'}</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" data-nav="import">${ic('upload')}Import</button>
+    <button class="btn primary" data-act="new-asset">${ic('plus')}Add asset</button>
+  </div>
+
+  <div class="stat-grid">
+    <button class="stat" data-act="quick" data-q="" data-status="" data-fav="0"><div class="stat-label">Total assets</div><div class="stat-value">${total}</div><div class="stat-foot">everything in the catalog</div></button>
+    <button class="stat gold" data-act="quick" data-status="onloan"><div class="stat-label">On loan</div><div class="stat-value">${onloan}</div><div class="stat-foot">out with someone right now</div></button>
+    <button class="stat ${overdue?'danger':''}" data-act="quick" data-status="overdue"><div class="stat-label">Overdue</div><div class="stat-value">${overdue}</div><div class="stat-foot">${overdue? 'needs follow-up' : 'nothing late — nice'}</div></button>
+    <button class="stat" data-act="quick" data-fav="1"><div class="stat-label">Favourites</div><div class="stat-value">${favs}</div><div class="stat-foot">starred items</div></button>
+  </div>
+
+  <div class="cols-2">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <section class="card panel">
+        <div class="panel-head"><h2 class="panel-title">Recent activity</h2><div class="spacer"></div><button class="btn ghost sm" data-nav="assets">View catalog</button></div>
+        <ul class="feed">
+          ${recent.map(f=>`<li>
+            <span class="glyph ${f.kind}">${ic(f.icon)}</span>
+            <div><div class="what">${f.text}</div><div class="when">${esc(f.sub||'')} · ${humanAgo(f.at)}</div></div>
+          </li>`).join('') || `<li><div class="what">No activity yet.</div></li>`}
+        </ul>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head"><h2 class="panel-title">Collections</h2><div class="spacer"></div><button class="btn ghost sm" data-nav="collections">Manage</button></div>
+        <div style="padding:14px">
+          ${colTiles ? `<div class="tile-grid">${colTiles}</div>` : `<div class="empty" style="padding:24px"><p style="margin-bottom:12px">No collections yet. Group assets by topic, course, or project.</p><button class="btn sm" data-act="new-collection">${ic('plus')}New collection</button></div>`}
+        </div>
+      </section>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <section class="card panel">
+        <div class="panel-head"><h2 class="panel-title">Added over time</h2></div>
+        <div style="padding:16px 18px 10px">
+          <div class="mini-chart">
+            ${months.map(m=>`<div class="bar" style="height:${Math.max(4, (m.n/maxN)*100)}%;background:color-mix(in srgb,var(--accent) ${20+Math.round(m.n/maxN*60)}%, var(--surface))" title="${m.n} added in ${m.l}"><span>${m.l}</span></div>`).join('')}
+          </div>
+          <div class="legend"><span>Last 6 months</span><span>peak ${maxN}/month</span></div>
+        </div>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head"><h2 class="panel-title">Due soon</h2><div class="spacer"></div><button class="btn ghost sm" data-act="quick" data-status="onloan">All loans</button></div>
+        <ul class="feed">
+          ${dueSoon.map(a=>`<li data-act="open" data-id="${a.id}" style="cursor:pointer">
+            <span class="glyph warn">${ic('clock')}</span>
+            <div style="min-width:0"><div class="what" style="font-weight:600">${esc(a.title)}</div><div class="when">${esc(a.holder||'Unassigned')} · due ${fmtDate(a.dueDate)}</div></div>
+          </li>`).join('') || `<li><div class="what" style="padding:6px 0">Nothing due in the next week.</div></li>`}
+        </ul>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-head"><h2 class="panel-title">By type</h2></div>
+        <div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px">
+          ${typeBreakdown()}
+        </div>
+      </section>
+    </div>
+  </div>`;
+}
+function typeBreakdown(){
+  const counts = TYPES.map(t=>({t, n:db.assets.filter(a=>a.type===t.id).length})).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  const max = Math.max(1,...counts.map(c=>c.n));
+  if(!counts.length) return '<div class="cell-sub">No assets yet.</div>';
+  return counts.map(({t,n})=>`<button class="tile" data-act="quick" data-type="${t.id}" style="padding:8px 10px;display:flex;align-items:center;gap:10px;box-shadow:none">
+      <span class="swatch" style="background:${t.color};width:26px;height:26px;margin:0;border-radius:7px">${typeSvg(t.id)}</span>
+      <span style="flex:1;min-width:0">
+        <span style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>${t.label}</span><span style="color:var(--muted)">${n}</span></span>
+        <span style="display:block;height:3px;border-radius:2px;background:var(--line2);margin-top:4px;overflow:hidden"><span style="display:block;height:100%;width:${(n/max*100).toFixed(0)}%;background:${t.color}"></span></span>
+      </span>
+    </button>`).join('');
+}
+function welcomeEmpty(){
+  return `
+  <div class="page-head"><div><div class="eyebrow">${esc(settings.libraryName)}</div><h1 class="page-title">Welcome to Stacks</h1><p class="page-sub">Your digital library starts here. Add items one at a time, or bring your existing catalog in one go.</p></div></div>
+  <div class="card" style="padding:clamp(20px,4vw,40px)">
+    <div style="max-width:640px;margin:0 auto;text-align:center">
+      <div class="empty" style="padding:0 0 8px">
+        <div class="big">${ic('book')}</div>
+        <h3>Nothing catalogued yet</h3>
+        <p>Pick the fastest way to get started. Import accepts CSV or JSON and lets you map your columns.</p>
+      </div>
+      <div class="row">
+        <button class="btn primary" data-act="new-asset">${ic('plus')}Add an asset</button>
+        <button class="btn" data-nav="import">${ic('upload')}Import a file</button>
+        <button class="btn" data-act="demo">${ic('star')}Load demo library</button>
+      </div>
+      <div class="divider"></div>
+      <div style="text-align:left;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
+        ${[['Any format','book','Catches books, PDFs, video, images and datasets.'],
+           ['Loans','clock','Borrow and return with holders and due dates.'],
+           ['Collections','layers','Group assets by topic, course, or project.'],
+           ['Local-first','shield','Data stays on this device. Export to back up.']].map(([txt,i,d])=>`
+          <div style="display:flex;gap:10px"><span style="width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:0 0 30px">${ic(i)}</span>
+          <span><b style="font-size:13px">${txt}</b><div class="cell-sub" style="line-height:1.45">${d}</div></span></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =====================================================================
+   VIEW: CATALOG
+   ===================================================================== */
+function viewAssets(){
+  const list = filtered();
+  const isList = ui.viewMode==='list';
+  const typeOpts = ['<option value="">All types</option>'].concat(TYPES.filter(t=>db.assets.some(a=>a.type===t.id)).map(t=>`<option value="${t.id}" ${ui.type===t.id?'selected':''}>${t.label}</option>`)).join('');
+  const colOpts = ['<option value="">All collections</option>'].concat(db.collections.map(c=>`<option value="${c.id}" ${ui.collection===c.id?'selected':''}>${esc(c.name)}</option>`)).join('');
+  const statOpts = ['','available','onloan','overdue','reference','missing'].map(s=>{
+    const found = STATUSES.find(x=>x.id===s);
+    const label = s==='overdue' ? 'Overdue' : (found ? found.label : 'Any status');
+    return `<option value="${s}" ${ui.status===s?'selected':''}>${label}</option>`;
+  }).join('');
+
+  const filterChips = (ui.q||ui.type||ui.collection||ui.status||ui.favorite) ? `
+    <button class="btn sm ghost" data-act="clear-filters">${ic('x')}Clear filters</button>` : '';
+
+  return `
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">${ui.collection? esc((collectionById(ui.collection)||{}).name||'Collection') : 'Catalog'}</h1>
+      <p class="page-sub">${list.length} item${list.length===1?'':'s'}${ui.q?` matching “${esc(ui.q)}”`:''}${ui.favorite?' · favourites':''}</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="View mode">
+      <button data-act="viewmode" data-v="grid" class="${isList?'':'on'}">Grid</button>
+      <button data-act="viewmode" data-v="list" class="${isList?'on':''}">List</button>
+    </div>
+    <button class="btn primary" data-act="new-asset">${ic('plus')}Add asset</button>
+  </div>
+
+  <div class="filterbar">
+    <div class="select"><select data-filter="type" aria-label="Filter by type">${typeOpts}</select></div>
+    <div class="select"><select data-filter="status" aria-label="Filter by status">${statOpts}</select></div>
+    <div class="select"><select data-filter="collection" aria-label="Filter by collection">${colOpts}</select></div>
+    <div class="select"><select data-filter="sort" aria-label="Sort">
+      <option value="default" ${ui.sort==='default'?'selected':''}>Recently added</option>
+      <option value="title" ${ui.sort==='title'?'selected':''}>Title A–Z</option>
+      <option value="creator" ${ui.sort==='creator'?'selected':''}>Creator A–Z</option>
+      <option value="newest" ${ui.sort==='newest'?'selected':''}>Year (newest)</option>
+      <option value="due" ${ui.sort==='due'?'selected':''}>Due date</option>
+    </select></div>
+    ${filterChips}
+    <div class="result-count">${list.length} result${list.length===1?'':'s'}</div>
+  </div>
+
+  ${list.length ? (isList ? assetTable(list) : `<div class="asset-grid">${list.map(assetCard).join('')}</div>`)
+    : `<div class="card"><div class="empty">
+        <div class="big">${ic('search')}</div>
+        <h3>No matches</h3>
+        <p>${db.assets.length? 'Nothing fits those filters. Try widening your search or clearing them.' : 'Your catalog is empty. Add your first asset or import a list.'}</p>
+        <div class="row">
+          ${db.assets.length? '<button class="btn" data-act="clear-filters">Clear filters</button>' : ''}
+          <button class="btn primary" data-act="new-asset">${ic('plus')}Add asset</button>
+          <button class="btn" data-nav="import">${ic('upload')}Import</button>
+        </div>
+      </div></div>`}
+  `;
+}
+function assetCard(a){
+  const t = typeMeta(a.type);
+  const col = collectionById(a.collection);
+  return `<button class="asset" data-act="open" data-id="${a.id}" aria-label="${esc(a.title)}">
+    <div class="cover">
+      ${coverHTML(a)}
+      <span class="fmt" style="color:${t.color}">${esc(t.label.toUpperCase())}</span>
+      ${a.favorite?`<span class="fav-ind">${ic('star')}</span>`:''}
+    </div>
+    <div class="asset-body">
+      <div class="asset-title">${esc(a.title)}</div>
+      <div class="asset-meta">${esc(a.creator||'Unknown creator')}${a.year?` · ${esc(a.year)}`:''}</div>
+      <div class="asset-foot">${statusChip(a)} ${col?`<span class="tag" style="margin-left:auto;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(col.name)}</span>`:''}</div>
+    </div>
+  </button>`;
+}
+function assetTable(list){
+  return `<div class="card table-wrap" style="overflow:visible">
+  <div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Title</th><th>Type</th><th>Creator</th><th>Collection</th><th>Status</th><th class="nowrap">Due</th><th></th></tr></thead>
+    <tbody>
+    ${list.map(a=>{ const t=typeMeta(a.type); const col=collectionById(a.collection); return `<tr data-act="open" data-id="${a.id}" tabindex="0">
+      <td><div class="th-title">${esc(a.title)}</div>${a.tags&&a.tags.length?`<div class="cell-sub">${a.tags.slice(0,3).map(x=>'#'+esc(x)).join(' ')}</div>`:''}</td>
+      <td><span class="chip mute" style="color:${t.color};border-color:color-mix(in srgb,${t.color} 25%,transparent)">${esc(t.label)}</span></td>
+      <td>${esc(a.creator||'—')}</td>
+      <td>${col?esc(col.name):'<span class="cell-sub">—</span>'}</td>
+      <td>${statusChipTable(a)}</td>
+      <td class="nowrap cell-sub">${a.status==='onloan'? fmtDate(a.dueDate) : '—'}</td>
+      <td><div class="row-actions">
+        <button class="btn sm ghost" data-act="edit" data-id="${a.id}" title="Edit">${ic('edit')}</button>
+        <button class="btn sm ghost" data-act="fav" data-id="${a.id}" title="Favourite">${ic('star')}</button>
+      </div></td>
+    </tr>`; }).join('')}
+    </tbody>
+  </table>
+  </div></div>`;
+}
+
+/* =====================================================================
+   VIEW: COLLECTIONS
+   ===================================================================== */
+function viewCollections(){
+  const tiles = db.collections.map(c=>{
+    const items = db.assets.filter(a=>a.collection===c.id);
+    const out = items.filter(a=>a.status==='onloan').length;
+    return `<div class="card tile" style="cursor:default;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:flex-start;gap:9px">
+        <span class="swatch" style="background:${esc(c.color)}">${typeSvg('other')}</span>
+        <div style="flex:1;min-width:0">
+          <div class="tile-name">${esc(c.name)}</div>
+          <div class="tile-meta">${items.length} item${items.length===1?'':'s'}${out?` · ${out} out`:''}</div>
+        </div>
+      </div>
+      ${c.description?`<p class="cell-sub" style="margin:9px 0 10px;line-height:1.45">${esc(c.description)}</p>`:'<div style="height:10px"></div>'}
+      <div style="display:flex;align-items:center;gap:4px;margin-top:auto;padding-top:2px">
+        <button class="btn sm" data-act="open-collection" data-id="${c.id}">Open${ic('external')}</button>
+        <button class="btn sm ghost" data-act="edit-collection" data-id="${c.id}" title="Edit collection" style="margin-left:auto">${ic('edit')}</button>
+        <button class="btn sm ghost" data-act="delete-collection" data-id="${c.id}" title="Delete collection">${ic('trash')}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const unassigned = db.assets.filter(a=>!a.collection || !collectionById(a.collection)).length;
+
+  return `
+  <div class="page-head">
+    <div><h1 class="page-title">Collections</h1><p class="page-sub">Group assets by subject, course, client, or project.</p></div>
+    <div class="spacer"></div>
+    <button class="btn primary" data-act="new-collection">${ic('plus')}New collection</button>
+  </div>
+  ${db.collections.length ? `<div class="tile-grid">${tiles}</div>` : `<div class="card"><div class="empty">
+      <div class="big">${ic('layers')}</div><h3>No collections yet</h3>
+      <p>Collections are a light way to organise the catalog. An asset can live in one collection.</p>
+      <button class="btn primary" data-act="new-collection">${ic('plus')}Create the first one</button>
+    </div></div>`}
+  ${unassigned?`<p class="page-sub" style="margin-top:16px">${unassigned} asset${unassigned===1?'':'s'} not in any collection. <button class="btn sm ghost" data-act="quick" data-collection="" style="text-decoration:underline">Show them</button></p>`:''}
+  `;
+}
+
+/* =====================================================================
+   VIEW: IMPORT
+   ===================================================================== */
+let importer = { rows:[], headers:[], map:{}, fileName:'', insert:null };
+function viewImport(){
+  return `
+  <div class="page-head">
+    <div><h1 class="page-title">Import assets</h1><p class="page-sub">Bring in a spreadsheet, CSV, or JSON file. Columns are matched automatically — you can adjust the mapping before importing.</p></div>
+  </div>
+
+  <div class="cols-2" style="grid-template-columns:1.35fr 1fr">
+    <section class="card" style="padding:18px">
+      <div class="drop-zone" id="dropZone">
+        ${ic('upload')} Drop a CSV or JSON file here
+        <span class="small">or click to choose · .csv, .tsv, .json</span>
+        <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.json" class="sr-only">
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label for="pasteBox">…or paste rows here <span class="hint">first row = column headers</span></label>
+        <textarea id="pasteBox" rows="5" placeholder="title,creator,type,year,tags,url&#10;The Design of Everyday Things,Don Norman,book,1988,design;psychology,https://…"></textarea>
+      </div>
+      <div class="row" style="justify-content:flex-start">
+        <button class="btn primary" data-act="parse-paste">${ic('list')}Parse pasted rows</button>
+        <button class="btn" data-act="download-template">${ic('download')}Template CSV</button>
+        <button class="btn" data-act="demo">${ic('star')}Load demo library</button>
+      </div>
+      <div id="importResult"></div>
+    </section>
+
+    <aside style="display:flex;flex-direction:column;gap:14px">
+      <section class="card" style="padding:16px">
+        <h2 class="panel-title" style="margin-bottom:8px">Recognised columns</h2>
+        <p class="cell-sub" style="margin:0 0 10px;line-height:1.5">Header names are matched loosely, so <span class="tag">Author</span> <span class="tag">Author(s)</span> <span class="tag">By</span> all land on <b>creator</b>.</p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px">
+          ${[['title','title, name, item, asset'],['creator','creator, author, artist, by'],['type','type, format, kind'],['year','year, date, published'],['tags','tags, keywords, subjects'],['collection','collection, category, folder'],['description','description, notes, summary'],['url','url, link, path, location'],['isbn','isbn, identifier, doi, id'],['status','status, availability'],['due','due, due date, return by'],['holder','holder, borrower, on loan to']]
+            .map(([k,v])=>`<code style="color:var(--accent);font-size:11.5px">${k}</code><span class="cell-sub">${v}</span>`).join('')}
+        </div>
+      </section>
+      <section class="card" style="padding:16px">
+        <h2 class="panel-title" style="margin-bottom:8px">Good to know</h2>
+        <ul class="cell-sub" style="margin:0;padding-left:16px;line-height:1.65">
+          <li>Items that already exist (same title + creator) are skipped, not duplicated.</li>
+          <li>New collection names in your file are created automatically.</li>
+          <li>Types are guessed from file extensions when missing.</li>
+          <li>Nothing is written until you confirm the preview.</li>
+        </ul>
+      </section>
+    </aside>
+  </div>`;
+}
+function guessTypeFromHeader(h){
+  const s = h.toLowerCase().trim().replace(/\s+/g,'');
+  const al = {
+    title:['title','name','item','asset','filename','document','resource','book','material'],
+    creator:['creator','author','authors','artist','director','by','writer','owner','producer'],
+    type:['type','format','kind','mediatype','categorytype','filetype'],
+    year:['year','date','published','publicationyear','released','created'],
+    tags:['tags','tag','keywords','keyword','subjects','subject','categories'],
+    collection:['collection','folder','category','shelf','library','section'],
+    description:['description','notes','note','summary','abstract','comment','comments','remarks'],
+    url:['url','link','location','path','filepath','web','address','href','permalink'],
+    file:['file','filename','attachment','filename'],
+    isbn:['isbn','identifier','id','doi','ref','reference','callnumber','barcode'],
+    status:['status','availability','state'],
+    dueDate:['due','duedate','returnby','return','returndate'],
+    holder:['holder','borrower','onloanto','borrowedby','loanee']
+  };
+  for(const [field, list] of Object.entries(al)){
+    if(list.includes(s)) return field;
+  }
+  // fuzzy
+  for(const [field, list] of Object.entries(al)){
+    if(list.some(l=> s.startsWith(l) || l.startsWith(s) )) return field;
+  }
+  return '';
+}
+function detectDelim(text){
+  const line = text.split(/\r?\n/).find(l=>l.trim()) || '';
+  const cands = [',',';','\t','|'];
+  let best = ',', bestN = -1;
+  cands.forEach(d=>{ const n = (line.match(new RegExp('\\'+d,'g'))||[]).length; if(n>bestN){ bestN=n; best=d; } });
+  return best;
+}
+function parseCSV(text){
+  const delim = detectDelim(text);
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){ cell+='"'; i++; } else q=false; }
+      else cell+=c;
+    }else{
+      if(c==='"') q=true;
+      else if(c===delim){ row.push(cell); cell=''; }
+      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if(c==='\r'){ /* skip */ }
+      else cell+=c;
+    }
+  }
+  if(cell!=='' || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+}
+function handleParsed(rows, fileName){
+  if(!rows.length){ $('#importResult').innerHTML = `<div class="import-summary bad" style="margin-top:14px">No rows found in that input.</div>`; return; }
+  const headers = rows[0].map((h,i)=> String(h).trim() || `column_${i+1}`);
+  const body = rows.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
+  if(!body.length){ $('#importResult').innerHTML = `<div class="import-summary bad" style="margin-top:14px">Only a header row was found — add at least one data row.</div>`; return; }
+  const map = {};
+  headers.forEach((h,i)=>{ const f = guessTypeFromHeader(h); if(f && map[f]===undefined) map[f]=i; });
+  if(map.title===undefined){
+    // no title column: use the first text column
+    const idx = headers.findIndex((h,i)=> !Object.values(map).includes(i));
+    map.title = idx>=0? idx : 0;
+  }
+  importer = { rows: body, headers, map, fileName, insert:null };
+  renderImportPreview();
+}
+function renderImportPreview(){
+  const { rows, headers, map, fileName } = importer;
+  const fieldLabels = { title:'Title', creator:'Creator', type:'Type', year:'Year', tags:'Tags', collection:'Collection', description:'Description', url:'URL / location', file:'File name', isbn:'Identifier', status:'Status', dueDate:'Due date', holder:'Holder' };
+  const mappingUI = Object.entries(fieldLabels).map(([f,label])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <label style="width:96px;font-size:11.5px;color:var(--muted);flex:0 0 96px">${label}${f==='title'?' *':''}</label>
+      <div class="select" style="flex:1">
+        <select data-map="${f}" style="width:100%">
+          <option value="">— not mapped —</option>
+          ${headers.map((h,i)=>`<option value="${i}" ${map[f]===i?'selected':''}>${esc(h)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`).join('');
+
+  const preview = rows.slice(0,3).map(r=>{
+    const val = f => map[f]!==undefined ? (r[map[f]]||'') : '';
+    return `<tr>
+      <td class="th-title" style="max-width:220px">${esc(val('title'))||'<span class="cell-sub">—</span>'}</td>
+      <td>${esc(val('creator'))}</td>
+      <td><span class="chip mute">${esc(val('type')||'auto')}</span></td>
+      <td>${esc(val('year'))}</td>
+      <td class="cell-sub" style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(val('url'))}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+    <div class="divider"></div>
+    <div class="import-summary">${ic('check')} Parsed ${rows.length} row${rows.length===1?'':'s'} from ${esc(fileName||'pasted text')} · ${headers.length} column${headers.length===1?'':'s'}</div>
+    <div class="section-label" style="margin-top:0">Map columns</div>
+    <div style="max-height:220px;overflow:auto;padding-right:6px">${mappingUI}</div>
+    <div class="section-label">Preview (first 3)</div>
+    <div class="table-wrap" style="border:1px solid var(--line);border-radius:10px">
+      <table class="tbl"><thead><tr><th>Title</th><th>Creator</th><th>Type</th><th>Year</th><th>URL</th></tr></thead><tbody>${preview}</tbody></table>
+    </div>
+    <div class="checkline" style="margin-top:14px"><input type="checkbox" id="skipDupes" checked><label for="skipDupes" style="font-weight:550">Skip items that already exist (same title &amp; creator)</label></div>
+    <div class="row" style="justify-content:flex-start;margin-top:6px">
+      <button class="btn primary" data-act="do-import">${ic('check')}Import ${rows.length} item${rows.length===1?'':'s'}</button>
+      <button class="btn ghost" data-act="cancel-import">Cancel</button>
+    </div>`;
+  $('#importResult').innerHTML = html;
+}
+function doImport(){
+  const { rows, map } = importer;
+  const skip = $('#skipDupes') ? $('#skipDupes').checked : true;
+  const get = (r,f)=> map[f]!==undefined ? String(r[map[f]]??'').trim() : '';
+  let added=0, dupes=0, createdCols=0;
+  const existingCols = new Set(db.collections.map(c=>c.name.toLowerCase()));
+
+  rows.forEach(r=>{
+    const title = get(r,'title');
+    if(!title) return;
+    const creator = get(r,'creator');
+    if(skip && db.assets.some(a=>a.title.toLowerCase()===title.toLowerCase() && (a.creator||'').toLowerCase()===(creator||'').toLowerCase())){ dupes++; return; }
+    let colId = '';
+    const colName = get(r,'collection');
+    if(colName){
+      const found = db.collections.find(c=>c.name.toLowerCase()===colName.toLowerCase());
+      if(found) colId = found.id;
+      else if(!existingCols.has(colName.toLowerCase())){
+        const nc = { id:uid('co'), name:colName, description:'', color:COLORS[db.collections.length % COLORS.length] };
+        db.collections.push(nc); existingCols.add(colName.toLowerCase()); colId = nc.id; createdCols++;
+      } else {
+        colId = (db.collections.find(c=>c.name.toLowerCase()===colName.toLowerCase())||{}).id || '';
+      }
+    }
+    const rawStatus = get(r,'status').toLowerCase();
+    let status = 'available';
+    if(/loan|out|borrow/.test(rawStatus)) status='onloan';
+    else if(/ref|not for loan|reading room/.test(rawStatus)) status='reference';
+    else if(/miss|lost/.test(rawStatus)) status='missing';
+    const due = get(r,'dueDate');
+    const a = normalizeAsset({
+      id: uid('as'),
+      title, creator,
+      type: get(r,'type'),
+      year: get(r,'year'),
+      tags: get(r,'tags'),
+      collection: colId,
+      description: get(r,'description'),
+      url: get(r,'url') || get(r,'file'),
+      isbn: get(r,'isbn'),
+      status,
+      holder: status==='onloan'? (get(r,'holder')||'') : '',
+      dueDate: status==='onloan'? (parseDate(due)? due : '') : '',
+      addedAt: new Date(Date.now()-added*40).toISOString(),
+      history: [{ at:new Date().toISOString(), action:'Imported from file' }]
+    });
+    db.assets.push(a); added++;
+  });
+  saveNow();
+  importer = { rows:[], headers:[], map:{}, fileName:'', insert:null };
+  go('assets', {q:'', type:'', collection:'', status:'', sort:'default'});
+  toast(`Imported ${added} item${added===1?'':'s'}${dupes?` · ${dupes} duplicate${dupes===1?'':'s'} skipped`:''}${createdCols?` · ${createdCols} collection${createdCols===1?'':'s'} created`:''}`);
+}
+
+/* =====================================================================
+   VIEW: EXPORT
+   ===================================================================== */
+function viewExport(){
+  const size = new Blob([JSON.stringify(db)]).size;
+  return `
+  <div class="page-head"><div><h1 class="page-title">Export &amp; backup</h1><p class="page-sub">Your library lives in this browser. Take a copy with you — JSON keeps everything, CSV opens in any spreadsheet.</p></div></div>
+  <div class="cols-2" style="grid-template-columns:1fr 1fr">
+    <section class="card" style="padding:18px">
+      <h2 class="panel-title" style="margin:0 0 4px">Backup file (JSON)</h2>
+      <p class="cell-sub" style="margin:0 0 12px;line-height:1.5">Complete snapshot: assets, loan history, collections and settings. Restore it on any device.</p>
+      <div class="code">assets: ${db.assets.length}
+collections: ${db.collections.length}
+estimated size: ${fmtBytes(size)}
+theme: ${esc(settings.theme)}</div>
+      <div class="row" style="justify-content:flex-start;margin-top:14px">
+        <button class="btn primary" data-act="export-json">${ic('download')}Download backup</button>
+        <button class="btn" data-act="restore">${ic('upload')}Restore from file</button>
+        <input type="file" id="restoreInput" accept=".json" class="sr-only">
+      </div>
+    </section>
+    <section class="card" style="padding:18px">
+      <h2 class="panel-title" style="margin:0 0 4px">Catalog (CSV)</h2>
+      <p class="cell-sub" style="margin:0 0 12px;line-height:1.5">One row per asset with every field. Hand this to a colleague or drop it back into Import.</p>
+      <div class="row" style="justify-content:flex-start">
+        <button class="btn" data-act="export-csv">${ic('download')}Download CSV</button>
+        <button class="btn" data-act="copy-json">${ic('list')}Copy JSON</button>
+        <button class="btn" data-act="print">${ic('doc')}Print catalogue</button>
+      </div>
+      <div class="divider"></div>
+      <h2 class="panel-title" style="margin:0 0 4px">Risks of local storage</h2>
+      <ul class="cell-sub" style="margin:0;padding-left:16px;line-height:1.65">
+        <li>Clearing browser data deletes the library.</li>
+        <li>Private/incognito windows forget everything on close.</li>
+        <li>Each browser keeps its own separate copy.</li>
+      </ul>
+      <p class="cell-sub" style="margin:10px 0 0">Rule of thumb: download a backup after any big import.</p>
+    </section>
+  </div>`;
+}
+function download(name, text, mime){
+  const blob = new Blob([text], {type:mime||'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 500);
+}
+function toCSV(list){
+  const cols = ['title','creator','type','year','collection','tags','status','holder','dueDate','isbn','url','description','favorite','addedAt'];
+  const q = v => {
+    const s = v==null?'':String(v);
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  const lines = [cols.join(',')];
+  list.forEach(a=>{
+    const col = collectionById(a.collection);
+    lines.push(cols.map(c=>{
+      if(c==='tags') return q((a.tags||[]).join('; '));
+      if(c==='collection') return q(col?col.name:'');
+      return q(a[c]);
+    }).join(','));
+  });
+  return lines.join('\r\n');
+}
+function exportJSON(){
+  const payload = { app:'Stacks', version:1, exportedAt:new Date().toISOString(), settings, collections:db.collections, assets:db.assets };
+  download(`${slug(settings.libraryName)}-backup-${todayISO()}.json`, JSON.stringify(payload,null,2), 'application/json');
+  toast('Backup downloaded');
+}
+function slug(s){ return String(s||'library').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'library'; }
+
+/* =====================================================================
+   VIEW: SETTINGS
+   ===================================================================== */
+function viewSettings(){
+  return `
+  <div class="page-head"><div><h1 class="page-title">Settings</h1><p class="page-sub">Naming, loan rules, and housekeeping.</p></div></div>
+  <div class="cols-2" style="grid-template-columns:1fr 1fr">
+    <section class="card" style="padding:18px">
+      <h2 class="panel-title" style="margin:0 0 12px">Library</h2>
+      <div class="field"><label for="setName">Library name</label><input type="text" id="setName" value="${esc(settings.libraryName)}" placeholder="My Library"></div>
+      <div class="field"><label for="setLoan">Default loan period <span class="hint">days</span></label><input type="number" id="setLoan" min="1" max="365" value="${esc(settings.loanDays||14)}"></div>
+      <div class="field"><label for="setTheme">Appearance</label>
+        <select class="inp" id="setTheme">
+          <option value="light" ${settings.theme==='light'?'selected':''}>Light (paper)</option>
+          <option value="dark" ${settings.theme==='dark'?'selected':''}>Dark (reading lamp)</option>
+        </select>
+      </div>
+      <div class="field"><label for="setView">Default catalog view</label>
+        <select class="inp" id="setView">
+          <option value="grid" ${settings.viewMode==='grid'?'selected':''}>Grid of covers</option>
+          <option value="list" ${settings.viewMode==='list'?'selected':''}>Table list</option>
+        </select>
+      </div>
+      <button class="btn primary" data-act="save-settings">${ic('check')}Save settings</button>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:16px">
+      <section class="card" style="padding:18px">
+        <h2 class="panel-title" style="margin:0 0 4px">Library status</h2>
+        <p class="cell-sub" style="margin:0 0 12px">${db.assets.length} assets · ${db.collections.length} collections · created ${fmtDate(String(settings.created||'').slice(0,10))}</p>
+        <div class="row" style="justify-content:flex-start">
+          <button class="btn" data-act="demo">${ic('star')}Load demo library</button>
+          <button class="btn" data-nav="import">${ic('upload')}Import</button>
+          <button class="btn" data-act="export-json">${ic('download')}Backup</button>
+        </div>
+      </section>
+      <section class="card" style="padding:18px;border-color:color-mix(in srgb,var(--danger) 30%, var(--line))">
+        <h2 class="panel-title" style="margin:0 0 4px;color:var(--danger)">Danger zone</h2>
+        <p class="cell-sub" style="margin:0 0 12px;line-height:1.5">These actions cannot be undone. Export a backup first.</p>
+        <div class="row" style="justify-content:flex-start">
+          <button class="btn danger" data-act="clear-loans">${ic('refresh')}Reset all loans</button>
+          <button class="btn danger" data-act="wipe">${ic('trash')}Delete all data</button>
+        </div>
+      </section>
+      <section class="card" style="padding:18px">
+        <h2 class="panel-title" style="margin:0 0 6px">Keyboard</h2>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12.5px">
+          <span class="kbd" style="position:static;transform:none">/</span><span>Focus search</span>
+          <span class="kbd" style="position:static;transform:none">n</span><span>New asset</span>
+          <span class="kbd" style="position:static;transform:none">Esc</span><span>Close panel or dialog</span>
+        </div>
+      </section>
+    </section>
+  </div>`;
+}
+
+/* =====================================================================
+   DRAWER: asset detail
+   ===================================================================== */
+function openDrawer(id){
+  const a = db.assets.find(x=>x.id===id); if(!a) return;
+  ui.drawer = id;
+  const t = typeMeta(a.type);
+  const col = collectionById(a.collection);
+  const d = $('#drawer');
+  d.innerHTML = `
+    <div class="drawer-head">
+      <div style="flex:1;min-width:0">
+        <h2 class="d-title">${esc(a.title)}</h2>
+        <div class="d-sub">${esc(a.creator||'Unknown creator')}${a.year?` · ${esc(a.year)}`:''} · ${esc(t.label)}</div>
+      </div>
+      <button class="btn ghost icon" data-act="close-drawer" aria-label="Close">${ic('x')}</button>
+    </div>
+    <div class="drawer-body">
+      <div class="detail-cover">${coverHTML(a)}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        ${statusChip(a)}
+        ${a.favorite?'<span class="chip warn">'+ic('star')+'Favourite</span>':''}
+        ${col?`<span class="chip info">${ic('layers')}${esc(col.name)}</span>`:''}
+      </div>
+      ${a.status==='onloan'?`
+        <div class="note-box" style="background:var(--surface2)">
+          <b>On loan</b>${a.holder?` to ${esc(a.holder)}`:''}${a.dueDate?` · due <b>${fmtDate(a.dueDate)}</b> (${overdueText(a)})`:''}
+        </div>`:''}
+      ${a.description?`<div class="note-box">${esc(a.description)}</div>`:''}
+      ${a.tags&&a.tags.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px">${a.tags.map(x=>`<span class="tag">#${esc(x)}</span>`).join('')}</div>`:''}
+      <div class="section-label">Details</div>
+      <dl class="meta">
+        <dt>Type</dt><dd>${esc(t.label)}</dd>
+        <dt>Format ext</dt><dd>${a.url? esc(extOf(a.url)||'—') : '—'}</dd>
+        <dt>Identifier</dt><dd>${esc(a.isbn||'—')}</dd>
+        <dt>Collection</dt><dd>${col?esc(col.name):'—'}</dd>
+        <dt>Added</dt><dd>${fmtDate(String(a.addedAt).slice(0,10))}</dd>
+        <dt>Updated</dt><dd>${humanAgo(a.updatedAt)}</dd>
+      </dl>
+      ${a.url?`<div class="field" style="margin-bottom:4px">
+        <label>Location</label>
+        <div class="code" style="max-height:80px">${esc(a.url)}</div>
+        <div class="row" style="justify-content:flex-start;margin-top:8px">
+          ${(/^https?:\/\//i.test(a.url))?`<a class="btn sm" href="${esc(a.url)}" target="_blank" rel="noopener">${ic('external')}Open link</a>`:`<button class="btn sm" data-act="copy-url" data-id="${a.id}">${ic('list')}Copy path</button>`}
+        </div>
+      </div>`:''}
+      <div class="section-label">History</div>
+      <ul class="timeline">
+        ${(a.history||[]).slice().reverse().slice(0,12).map((h,i)=>`<li><span class="dot ${i===0?'on':''}"></span><div>${esc(h.action)}<time>${fmtDate(String(h.at).slice(0,10))} · ${humanAgo(h.at)}</time></div></li>`).join('')}
+      </ul>
+    </div>
+    <div class="drawer-foot">
+      ${a.status==='onloan'
+        ? `<button class="btn primary" data-act="return" data-id="${a.id}">${ic('check')}Check in</button>
+           <button class="btn" data-act="renew" data-id="${a.id}">${ic('refresh')}Renew</button>`
+        : `<button class="btn primary" data-act="borrow" data-id="${a.id}" ${a.status==='reference'?'disabled title="Reference items stay in the library"':''}>${ic('clock')}Check out</button>`}
+      <button class="btn" data-act="edit" data-id="${a.id}">${ic('edit')}Edit</button>
+      <button class="btn ghost icon" data-act="fav" data-id="${a.id}" title="Favourite" style="margin-left:auto">${ic('star')}</button>
+      <button class="btn ghost icon" data-act="delete" data-id="${a.id}" title="Delete">${ic('trash')}</button>
+    </div>`;
+  d.classList.add('on'); d.setAttribute('aria-hidden','false');
+  $('#scrim').classList.add('on');
+}
+function extOf(u){ const m = String(u).match(/\.([a-z0-9]{1,6})(?:$|\?)/i); return m?m[1].toUpperCase():''; }
+function overdueText(a){
+  const d = relDays(a.dueDate);
+  if(d==null) return 'no due date';
+  if(d<0) return Math.abs(d)+' day'+(Math.abs(d)===1?'':'s')+' overdue';
+  if(d===0) return 'due today';
+  return 'in '+d+' day'+(d===1?'':'s');
+}
+function closeDrawer(){
+  ui.drawer = null;
+  $('#drawer').classList.remove('on'); $('#drawer').setAttribute('aria-hidden','true');
+  $('#scrim').classList.remove('on');
+}
+
+/* =====================================================================
+   MODALS
+   ===================================================================== */
+function openModal(html, wide){
+  const card = $('#modalCard');
+  card.className = 'modal-card' + (wide?' wide':'');
+  card.innerHTML = html;
+  $('#modal').classList.add('on');
+  const first = card.querySelector('input:not([type=checkbox]),textarea,select');
+  if(first) setTimeout(()=>first.focus(), 60);
+}
+function closeModal(){
+  $('#modal').classList.remove('on');
+  $('#modalCard').innerHTML = '';
+}
+function assetForm(a){
+  const isNew = !a;
+  a = a || { id:'', title:'', creator:'', type:'other', year:'', tags:[], collection:'', description:'', url:'', isbn:'', status:'available' };
+  const colOpts = ['<option value="">— none —</option>'].concat(db.collections.map(c=>`<option value="${c.id}" ${a.collection===c.id?'selected':''}>${esc(c.name)}</option>`)).join('');
+  openModal(`
+    <div class="modal-head">
+      <h2>${isNew?'Add asset':'Edit asset'}</h2>
+      <div style="margin-left:auto"><button class="btn ghost icon" data-act="close-modal" aria-label="Close">${ic('x')}</button></div>
+    </div>
+    <div class="modal-body">
+      <form id="assetForm">
+        <input type="hidden" name="id" value="${esc(a.id)}">
+        <div class="field"><label for="f_title">Title *</label><input type="text" id="f_title" name="title" value="${esc(a.title)}" required placeholder="e.g. Field Guide to Urban Birds"></div>
+        <div class="form-grid">
+          <div class="field"><label for="f_creator">Creator</label><input type="text" id="f_creator" name="creator" value="${esc(a.creator)}" placeholder="Author, artist, studio…"></div>
+          <div class="field"><label for="f_year">Year</label><input type="text" id="f_year" name="year" value="${esc(a.year)}" placeholder="2021"></div>
+          <div class="field"><label for="f_type">Type</label><select class="inp" id="f_type" name="type">${TYPES.map(t=>`<option value="${t.id}" ${a.type===t.id?'selected':''}>${t.label}</option>`).join('')}</select></div>
+          <div class="field"><label for="f_status">Status</label><select class="inp" id="f_status" name="status">${STATUSES.map(s=>`<option value="${s.id}" ${a.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
+          <div class="field"><label for="f_collection">Collection</label><select class="inp" id="f_collection" name="collection">${colOpts}</select></div>
+          <div class="field"><label for="f_isbn">Identifier <span class="hint">ISBN, DOI, call no.</span></label><input type="text" id="f_isbn" name="isbn" value="${esc(a.isbn)}"></div>
+          <div class="field full"><label for="f_url">URL or file path <span class="hint">optional — images with a URL show as covers</span></label><input type="text" id="f_url" name="url" value="${esc(a.url)}" placeholder="https://… or /Volumes/Archive/report.pdf"></div>
+          <div class="field full"><label for="f_tags">Tags <span class="hint">comma separated</span></label><input type="text" id="f_tags" name="tags" value="${esc((a.tags||[]).join(', '))}" placeholder="design, reference, 2024"></div>
+          <div class="field full"><label for="f_description">Notes / description</label><textarea id="f_description" name="description" rows="3">${esc(a.description)}</textarea></div>
+        </div>
+        <div class="checkline" style="margin-bottom:0"><input type="checkbox" id="f_fav" name="favorite" ${a.favorite?'checked':''}><label for="f_fav">Mark as favourite</label></div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      ${isNew?'':'<button class="btn danger" data-act="delete" data-id="'+esc(a.id)+'" style="margin-right:auto">'+ic('trash')+'Delete</button>'}
+      <button class="btn" data-act="close-modal">Cancel</button>
+      <button class="btn primary" data-act="save-asset">${isNew?'Add to library':'Save changes'}</button>
+    </div>`, true);
+}
+function saveAsset(){
+  const f = $('#assetForm'); if(!f) return;
+  const data = Object.fromEntries(new FormData(f).entries());
+  if(!String(data.title||'').trim()){ toast('A title is required', true); $('#f_title').focus(); return; }
+  const payload = {
+    title: data.title, creator: data.creator, type: data.type, year: data.year,
+    tags: data.tags, collection: data.collection, description: data.description,
+    url: data.url, isbn: data.isbn, status: data.status, favorite: !!data.favorite
+  };
+  if(data.id){
+    const a = db.assets.find(x=>x.id===data.id);
+    if(a){
+      const wasStatus = a.status;
+      Object.assign(a, payload, { tags: normalizeAsset({tags:payload.tags}).tags, updatedAt:new Date().toISOString() });
+      if(wasStatus==='onloan' && a.status!=='onloan'){ a.holder=''; a.dueDate=''; }
+      touch(a, 'Details edited');
+      toast('Asset updated');
+    }
+  }else{
+    const a = normalizeAsset(Object.assign({id:uid('as')}, payload, { addedAt:new Date().toISOString(), history:[{at:new Date().toISOString(), action:'Added to library'}] }));
+    db.assets.unshift(a);
+    toast('Added to library');
+  }
+  saveNow(); closeModal(); render();
+  if(ui.drawer && db.assets.find(x=>x.id===ui.drawer)) openDrawer(ui.drawer);
+}
+function borrowModal(id){
+  const a = db.assets.find(x=>x.id===id); if(!a) return;
+  openModal(`
+    <div class="modal-head"><h2>Check out</h2><div style="margin-left:auto"><button class="btn ghost icon" data-act="close-modal">${ic('x')}</button></div></div>
+    <div class="modal-body">
+      <p class="cell-sub" style="margin:0 0 14px">${esc(a.title)}</p>
+      <div class="field"><label for="b_holder">Borrower</label><input type="text" id="b_holder" placeholder="Name, team, or desk" value="${esc(a.holder||'')}"></div>
+      <div class="field"><label for="b_due">Due date</label><input type="date" id="b_due" value="${isoAddDays(Number(settings.loanDays)||LOAN)}"></div>
+      <p class="cell-sub" style="margin:0">Default loan period is ${esc(settings.loanDays||LOAN)} days — change it in Settings.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-act="close-modal">Cancel</button>
+      <button class="btn primary" data-act="confirm-borrow" data-id="${esc(id)}">${ic('check')}Check out</button>
+    </div>`);
+}
+function collectionModal(id){
+  const c = id ? collectionById(id) : null;
+  openModal(`
+    <div class="modal-head"><h2>${c?'Edit collection':'New collection'}</h2><div style="margin-left:auto"><button class="btn ghost icon" data-act="close-modal">${ic('x')}</button></div></div>
+    <div class="modal-body">
+      <form id="colForm">
+        <input type="hidden" name="id" value="${c?esc(c.id):''}">
+        <div class="field"><label for="c_name">Name *</label><input type="text" id="c_name" value="${c?esc(c.name):''}" placeholder="e.g. Local History, Design references, Client X"></div>
+        <div class="field"><label for="c_desc">Description</label><textarea id="c_desc" rows="2" placeholder="Optional">${c?esc(c.description||''):''}</textarea></div>
+        <div class="field"><label>Colour</label>
+          <div style="display:flex;gap:7px;flex-wrap:wrap" id="colorRow">
+            ${COLORS.map(col=>`<button type="button" data-act="pick-color" data-color="${col}" style="width:26px;height:26px;border-radius:8px;border:2px solid ${(c&&c.color===col)||(!c&&COLORS[0]===col)?'var(--ink)':'transparent'};background:${col}" aria-label="colour ${col}"></button>`).join('')}
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      ${c?'<button class="btn danger" data-act="delete-collection" data-id="'+esc(c.id)+'" style="margin-right:auto">'+ic('trash')+'Delete</button>':''}
+      <button class="btn" data-act="close-modal">Cancel</button>
+      <button class="btn primary" data-act="save-collection" data-id="${c?esc(c.id):''}">${c?'Save':'Create'}</button>
+    </div>`);
+}
+function confirmModal(title, body, okLabel, act, id, danger){
+  openModal(`
+    <div class="modal-head"><h2>${esc(title)}</h2><div style="margin-left:auto"><button class="btn ghost icon" data-act="close-modal">${ic('x')}</button></div></div>
+    <div class="modal-body"><p style="margin:0;line-height:1.55">${body}</p></div>
+    <div class="modal-foot">
+      <button class="btn" data-act="close-modal">Cancel</button>
+      <button class="btn ${danger?'danger':'primary'}" data-act="${act}" data-id="${esc(id||'')}">${esc(okLabel)}</button>
+    </div>`);
+}
+
+/* =====================================================================
+   DEMO DATA
+   ===================================================================== */
+function loadDemo(){
+  const cols = [
+    { id:'co_design', name:'Design references', description:'Typographic and visual references for the studio.', color:'#0e6b5b' },
+    { id:'co_history', name:'Local history', description:'Archival material about the district.', color:'#8a5a2b' },
+    { id:'co_field', name:'Field recordings', description:'Audio captured on site visits.', color:'#3d5a80' },
+    { id:'co_data', name:'Open datasets', description:'Public data used in reporting.', color:'#2f6f4f' }
+  ];
+  const now = Date.now(), day = 86400000;
+  const mk = (o)=>({ id:uid('as'), tags:[], collection:'', description:'', url:'', isbn:'', status:'available', holder:'', dueDate:'', favorite:false, addedAt:new Date(now-Math.random()*200*day).toISOString(), updatedAt:new Date(now-Math.random()*30*day).toISOString(), history:[{at:new Date(now-Math.random()*40*day).toISOString(), action:'Added to library'}], ...o });
+  const assets = [
+    mk({ title:'Grid Systems in Graphic Design', creator:'Josef Müller-Brockmann', type:'book', year:'1981', tags:['design','typography','reference'], collection:'co_design', isbn:'978-3721201451', description:'A canonical text on modular layout. Kept in the reading room.', favorite:true, url:'/archive/books/grid-systems.pdf' }),
+    mk({ title:'The Elements of Typographic Style', creator:'Robert Bringhurst', type:'book', year:'1992', tags:['design','typography'], collection:'co_design', status:'onloan', holder:'Mira Santos', dueDate:isoAddDays(2), isbn:'978-0881792124', description:'Requested for the studio workshop.' }),
+    mk({ title:'Studio Archive 2008–2016 (scans)', creator:'Studio Records', type:'image', year:'2016', tags:['archive','scans'], collection:'co_design', description:'1,240 flatbed scans of the print archive. Contact sheet in shared drive.', url:'https://example.org/archive/scans' }),
+    mk({ title:'Barangay Boundaries of Quezon City, 1939', creator:'Bureau of Lands', type:'map', year:'1939', tags:['maps','colonial','districts'], collection:'co_history', isbn:'LOC-G3708', description:'Hand-traced and digitised at 600 dpi. Oversized item — handle with care.', favorite:true }),
+    mk({ title:'Interview with Rosario A., market vendor', creator:'Oral History Team', type:'audio', year:'2023', tags:['interviews','markets','audio'], collection:'co_history', status:'onloan', holder:'J. de la Cruz', dueDate:isoAddDays(-3), description:'62-minute interview recorded on cassette transfer. Transcript pending.' }),
+    mk({ title:'Photographs of the old municipal hall', creator:'Unknown', type:'image', year:'1958', tags:['photographs','1950s'], collection:'co_history', description:'Six silver gelatin prints, digitised. Provenance unresolved.' }),
+    mk({ title:'Dawn chorus, riverside transect', creator:'Field Team B', type:'audio', year:'2024', tags:['birds','field recording'], collection:'co_field', description:'48 kHz WAV, 4 hours. Recorded at 05:12.' }),
+    mk({ title:'Water level log, upstream gauge', creator:'Hydrology Dept.', type:'dataset', year:'2025', tags:['hydrology','csv','public'], collection:'co_data', url:'https://example.org/data/water-levels.csv', description:'Hourly readings, Jan–Dec. Cleaned, one gap in March.' }),
+    mk({ title:'Municipal budget 2025 (cleaned)', creator:'Finance Office', type:'dataset', year:'2025', tags:['budget','open data'], collection:'co_data', url:'https://example.org/data/budget-2025.xlsx' }),
+    mk({ title:'How to Read a Photograph', creator:'Ian Jeffrey', type:'ebook', year:'1981', tags:['photography','essays'], collection:'co_design', url:'https://example.org/ebooks/how-to-read.pdf' }),
+    mk({ title:'Letterpress specimen book', creator:'Workshop Proofs', type:'document', year:'2019', tags:['print','specimen'], collection:'co_design', status:'reference', description:'Consult in the studio only — fragile binding.' }),
+    mk({ title:'Short film: Ferries of the Pasig', creator:'C. Lorenzo', type:'video', year:'2021', tags:['film','river'], collection:'co_history', status:'onloan', holder:'Archives class', dueDate:isoAddDays(9), description:'18 min, 4K. Screening copy only.' }),
+    mk({ title:'Cataloguing rules for small archives', creator:'Local History Society', type:'article', year:'2018', tags:['standards','archives'], description:'Practical sheet, 12 pages. Basis for our call numbers.' }),
+    mk({ title:'Soil samples register', creator:'Field Team A', type:'other', year:'2022', tags:['register','physical'], status:'missing', description:'Last seen in cabinet 4. Marked missing pending search.' })
+  ];
+  db.collections = [...db.collections, ...cols.filter(c=>!db.collections.some(x=>x.id===c.id||x.name===c.name))];
+  db.assets = [...assets, ...db.assets];
+  saveNow();
+  go('dashboard');
+  toast('Demo library loaded — 14 assets, 4 collections');
+}
+
+/* =====================================================================
+   ACTIONS
+   ===================================================================== */
+const actions = {
+  'new-asset': ()=> assetForm(null),
+  'edit': (el)=> { const a = db.assets.find(x=>x.id===el.dataset.id); if(a) assetForm(a); },
+  'save-asset': ()=> saveAsset(),
+  'close-modal': ()=> closeModal(),
+  'open': (el)=> openDrawer(el.dataset.id),
+  'close-drawer': ()=> closeDrawer(),
+  'fav': (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    a.favorite = !a.favorite; touch(a, a.favorite?'Marked as favourite':'Removed from favourites');
+    saveNow(); render(); if(ui.drawer) openDrawer(ui.drawer);
+    toast(a.favorite?'Starred':'Unstarred');
+  },
+  'delete': (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    confirmModal('Delete this asset?', `“${esc(a.title)}” and its loan history will be removed. This cannot be undone.`, 'Delete', 'delete-confirm', a.id, true);
+  },
+  'delete-confirm': (el)=>{
+    db.assets = db.assets.filter(x=>x.id!==el.dataset.id);
+    saveNow(); closeModal(); closeDrawer(); render(); toast('Asset deleted');
+  },
+  'borrow': (el)=> borrowModal(el.dataset.id),
+  'confirm-borrow': (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    const holder = ($('#b_holder')||{}).value || '';
+    const due = ($('#b_due')||{}).value || '';
+    a.status='onloan'; a.holder = holder.trim(); a.dueDate = due;
+    touch(a, `Checked out${a.holder?` to ${a.holder}`:''}${due?`, due ${fmtDate(due)}`:''}`);
+    saveNow(); closeModal(); render(); if(ui.drawer) openDrawer(ui.drawer);
+    toast('Checked out'+(a.holder?` to ${a.holder}`:''));
+  },
+  'return': (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    const late = isOverdue(a);
+    a.status='available'; const wasHolder = a.holder;
+    a.holder=''; a.dueDate='';
+    touch(a, `Checked in${wasHolder?` from ${wasHolder}`:''}${late?' (late)':''}`);
+    saveNow(); render(); if(ui.drawer) openDrawer(ui.drawer);
+    toast(late?'Checked in — was overdue':'Checked in');
+  },
+  'renew': (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    a.dueDate = (a.dueDate && (relDays(a.dueDate)??0)>0) ? (function(){ const d=new Date(a.dueDate+'T00:00:00'); d.setDate(d.getDate()+Number(settings.loanDays||LOAN)); return d.toISOString().slice(0,10); })() : isoAddDays(Number(settings.loanDays||LOAN));
+    touch(a, `Renewed, now due ${fmtDate(a.dueDate)}`);
+    saveNow(); render(); if(ui.drawer) openDrawer(ui.drawer); toast('Renewed to '+fmtDate(a.dueDate));
+  },
+  'copy-url': async (el)=>{
+    const a = db.assets.find(x=>x.id===el.dataset.id); if(!a) return;
+    try{ await navigator.clipboard.writeText(a.url); toast('Path copied'); }
+    catch(e){ toast('Copy failed — select the text instead', true); }
+  },
+  'new-collection': ()=> collectionModal(null),
+  'edit-collection': (el)=> collectionModal(el.dataset.id),
+  'pick-color': (el)=>{
+    $$('#colorRow button').forEach(b=> b.style.borderColor='transparent');
+    el.style.borderColor = 'var(--ink)';
+    $('#colorRow').dataset.pick = el.dataset.color;
+  },
+  'save-collection': (el)=>{
+    const name = ($('#c_name')||{}).value?.trim();
+    if(!name){ toast('A name is required', true); return; }
+    const desc = ($('#c_desc')||{}).value || '';
+    const color = $('#colorRow').dataset.pick || COLORS[0];
+    const id = el.dataset.id;
+    if(id){
+      const c = collectionById(id);
+      if(c){ Object.assign(c, {name, description:desc, color}); toast('Collection updated'); }
+    }else{
+      db.collections.push({ id:uid('co'), name, description:desc, color });
+      toast('Collection created');
+    }
+    saveNow(); closeModal(); render();
+  },
+  'delete-collection': (el)=>{
+    const c = collectionById(el.dataset.id); if(!c) return;
+    const n = db.assets.filter(a=>a.collection===c.id).length;
+    confirmModal('Delete collection?', `“${esc(c.name)}” will be removed. ${n? `${n} item${n===1?'':'s'} will stay in the catalog but become unassigned.`:'No items are in it.'}`, 'Delete', 'delete-collection-confirm', c.id, true);
+  },
+  'delete-collection-confirm': (el)=>{
+    db.collections = db.collections.filter(c=>c.id!==el.dataset.id);
+    db.assets.forEach(a=>{ if(a.collection===el.dataset.id) a.collection=''; });
+    if(ui.collection===el.dataset.id) ui.collection='';
+    saveNow(); closeModal(); render(); toast('Collection deleted');
+  },
+  'open-collection': (el)=> go('assets', {collection:el.dataset.id, q:'', status:'', type:''}),
+  'quick': (el)=>{
+    const d = el.dataset;
+    go('assets', { q:'', type:d.type||'', status:d.status||'', collection:d.collection!==undefined? d.collection : '', favorite: d.fav==='1' });
+  },
+  'clear-filters': ()=> { ui.q=''; ui.type=''; ui.status=''; ui.collection=''; ui.favorite=false; ui.sort='default'; $('#search').value=''; render(); },
+  'viewmode': (el)=>{ ui.viewMode = el.dataset.v; settings.viewMode = el.dataset.v; saveNow(); render(); },
+  'save-settings': ()=>{
+    settings.libraryName = ($('#setName')||{}).value?.trim() || 'My Library';
+    settings.loanDays = Math.min(365, Math.max(1, Number(($('#setLoan')||{}).value)||14));
+    settings.theme = ($('#setTheme')||{}).value || 'light';
+    settings.viewMode = ($('#setView')||{}).value || 'grid';
+    ui.viewMode = settings.viewMode;
+    saveNow(); render(); toast('Settings saved');
+  },
+  'export-json': ()=> exportJSON(),
+  'export-csv': ()=>{
+    download(`${slug(settings.libraryName)}-catalog-${todayISO()}.csv`, toCSV(db.assets), 'text/csv;charset=utf-8');
+    toast('CSV downloaded');
+  },
+  'copy-json': async ()=>{
+    try{ await navigator.clipboard.writeText(JSON.stringify({settings, collections:db.collections, assets:db.assets}, null, 2)); toast('JSON copied to clipboard'); }
+    catch(e){ toast('Copy failed in this browser', true); }
+  },
+  'print': ()=> window.print(),
+  'restore': ()=> ($('#restoreInput')||{}).click? $('#restoreInput').click() : null,
+  'demo': ()=> loadDemo(),
+  'download-template': ()=>{
+    const t = 'title,creator,type,year,tags,collection,status,holder,due,isbn,url,description\n'
+      + 'Field Guide to Urban Birds,M. Reyes,book,2021,"birds; field; reference",Field guides,available,,,,978-0000000000,/archive/birds.pdf,Signed copy in cabinet 2\n'
+      + 'Night Market Soundwalks,Studio A,audio,2024,"audio; markets",Field recordings,onloan,R. Cruz,2026-11-10,,https://example.org/soundwalks,Three 12-minute walks\n'
+      + 'Census extract 2020,Statistics Office,dataset,2020,"csv; public",Open datasets,available,,,,https://example.org/census.csv,Clean extract with notes\n';
+    download('stacks-import-template.csv', t, 'text/csv;charset=utf-8');
+    toast('Template downloaded — fill it in and import');
+  },
+  'parse-paste': ()=>{
+    const txt = ($('#pasteBox')||{}).value || '';
+    if(!txt.trim()){ toast('Paste some rows first', true); return; }
+    if(/^\s*[\[{]/.test(txt)){
+      try{ const j = JSON.parse(txt); handleJSON(j, 'pasted JSON'); return; }
+      catch(e){ toast('That looks like JSON but would not parse', true); return; }
+    }
+    handleParsed(parseCSV(txt), 'pasted text');
+  },
+  'do-import': ()=> doImport(),
+  'cancel-import': ()=>{ importer = { rows:[], headers:[], map:{}, fileName:'', insert:null }; $('#importResult').innerHTML=''; },
+  'clear-loans': ()=>{
+    confirmModal('Reset all loans?', 'Every item currently on loan becomes available, and holders and due dates are cleared. History entries stay.', 'Reset loans', 'clear-loans-confirm', '', true);
+  },
+  'clear-loans-confirm': ()=>{
+    let n=0;
+    db.assets.forEach(a=>{ if(a.status==='onloan'){ a.status='available'; a.holder=''; a.dueDate=''; touch(a,'Loan reset'); n++; } });
+    saveNow(); closeModal(); render(); toast(`Reset ${n} loan${n===1?'':'s'}`);
+  },
+  'wipe': ()=>{
+    confirmModal('Delete everything?', 'All assets, collections, and loan history will be erased from this browser. Export a backup first if you might want it back.', 'Delete all data', 'wipe-confirm', '', true);
+  },
+  'wipe-confirm': ()=>{
+    db = { assets:[], collections:[], v:1 };
+    saveNow(); closeModal(); closeDrawer(); go('dashboard'); toast('Library cleared');
+  }
+};
+
+function handleJSON(obj, fileName){
+  let arr = Array.isArray(obj) ? obj : (obj.assets || obj.items || obj.records || []);
+  if(!Array.isArray(arr) || !arr.length){ $('#importResult').innerHTML = `<div class="import-summary bad" style="margin-top:14px">No asset array found in that JSON.</div>`; return; }
+  const keys = [...new Set(arr.flatMap(o=>Object.keys(o)))];
+  const headers = keys;
+  const rows = arr.map(o=> keys.map(k=>{
+    const v = o[k];
+    return Array.isArray(v) ? v.join('; ') : (v==null?'':String(v));
+  }));
+  handleParsed([headers, ...rows], fileName);
+}
+
+/* =====================================================================
+   EVENTS
+   ===================================================================== */
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest('[data-act]');
+  const navEl = e.target.closest('[data-nav]');
+  if(el){
+    e.preventDefault(); e.stopPropagation();
+    const fn = actions[el.dataset.act];
+    if(fn) fn(el, e);
+    else toast('Not wired up yet: '+el.dataset.act, true);
+    return;
+  }
+  if(navEl){ e.preventDefault(); go(navEl.dataset.nav); }
+});
+$('#scrim').addEventListener('click', closeDrawer);
+$('#modal').addEventListener('click', (e)=>{ if(e.target.id==='modal') closeModal(); });
+$('#menuBtn').addEventListener('click', ()=> $('#sidebar').classList.toggle('on'));
+$('#themeBtn').addEventListener('click', ()=>{
+  settings.theme = settings.theme==='dark' ? 'light' : 'dark';
+  saveNow(); render();
+});
+$('#addBtn').addEventListener('click', ()=> assetForm(null));
+$('#exportQuick').addEventListener('click', ()=> exportJSON());
+
+let searchTimer;
+$('#search').addEventListener('input', (e)=>{
+  ui.q = e.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(()=>{
+    if(ui.nav!=='assets') go('assets', {}); else render();
+  }, 130);
+});
+
+document.addEventListener('change', (e)=>{
+  const sel = e.target.closest('[data-filter]');
+  if(sel){
+    const f = sel.dataset.filter;
+    if(f==='collection') ui.collection = sel.value;
+    else ui[f] = sel.value;
+    render(); return;
+  }
+  const mapSel = e.target.closest('[data-map]');
+  if(mapSel){
+    const f = mapSel.dataset.map;
+    const v = mapSel.value;
+    if(v==='') delete importer.map[f]; else importer.map[f] = Number(v);
+    return;
+  }
+  if(e.target.id==='fileInput'){
+    const file = e.target.files[0]; if(file) readImportFile(file);
+  }
+  if(e.target.id==='restoreInput'){
+    const file = e.target.files[0]; if(file) restoreFile(file);
+  }
+});
+
+function readImportFile(file){
+  const r = new FileReader();
+  r.onload = ()=>{
+    const text = String(r.result||'');
+    try{
+      if(/\.json$/i.test(file.name) || /^\s*[\[{]/.test(text)){
+        handleJSON(JSON.parse(text), file.name);
+      }else{
+        handleParsed(parseCSV(text), file.name);
+      }
+    }catch(err){ toast('Could not read that file: '+err.message, true); }
+  };
+  r.readAsText(file);
+}
+function restoreFile(file){
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const p = JSON.parse(String(r.result||''));
+      const assets = Array.isArray(p) ? p : (p.assets||[]);
+      if(!Array.isArray(assets)) throw new Error('no assets array');
+      const cols = Array.isArray(p.collections)? p.collections : [];
+      const mode = db.assets.length ? (confirm(`Replace the ${db.assets.length} assets in this browser with the ${assets.length} from the backup?\n\nOK = replace · Cancel = merge (keep both)`) ? 'replace':'merge') : 'replace';
+      if(mode==='replace'){ db.assets = assets.map(normalizeAsset); db.collections = cols; }
+      else {
+        const names = new Set(cols.map(c=>c.name));
+        cols.forEach(c=>{ if(!db.collections.some(x=>x.name===c.name)) db.collections.push(c); else names.add(c.name); });
+        db.assets = db.assets.concat(assets.map(normalizeAsset));
+      }
+      if(p.settings){ settings = Object.assign(settings, p.settings); ui.viewMode = settings.viewMode||'grid'; }
+      saveNow(); go('dashboard'); toast(`Restored ${assets.length} asset${assets.length===1?'':'s'} (${mode})`);
+    }catch(err){ toast('That backup could not be read: '+err.message, true); }
+  };
+  r.readAsText(file);
+}
+
+/* drag & drop on import view */
+document.addEventListener('dragover', (e)=>{
+  const dz = e.target.closest('#dropZone');
+  if(dz){ e.preventDefault(); dz.classList.add('hot'); }
+});
+document.addEventListener('dragleave', (e)=>{
+  const dz = e.target.closest('#dropZone'); if(dz) dz.classList.remove('hot');
+});
+document.addEventListener('drop', (e)=>{
+  const dz = e.target.closest('#dropZone');
+  if(dz){
+    e.preventDefault(); dz.classList.remove('hot');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) readImportFile(f);
+  }
+});
+document.addEventListener('click', (e)=>{
+  const dz = e.target.closest('#dropZone');
+  if(dz && e.target.id !== 'fileInput'){ const fi = $('#fileInput'); if(fi) fi.click(); }
+}, true);
+
+/* keyboard */
+document.addEventListener('keydown', (e)=>{
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if(e.key==='Escape'){ if($('#modal').classList.contains('on')) closeModal(); else if(ui.drawer) closeDrawer(); else $('#sidebar').classList.remove('on'); return; }
+  if(e.key==='/' && !typing){ e.preventDefault(); $('#search').focus(); $('#search').select(); return; }
+  if((e.key==='n'||e.key==='N') && !typing && !e.metaKey && !e.ctrlKey){ e.preventDefault(); assetForm(null); return; }
+});
+$('#view').addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){
+    const tr = e.target.closest('tr[data-act]');
+    if(tr){ e.preventDefault(); openDrawer(tr.dataset.id); }
+  }
+});
+
+/* boot */
+load();
+if(!settings.brandSub) settings.brandSub = 'Digital Library';
+render();
+window.addEventListener('storage', (e)=>{ if(e.key===DB_KEY || e.key===SET_KEY){ load(); render(); } });
+</script>
+</body>
+</html>

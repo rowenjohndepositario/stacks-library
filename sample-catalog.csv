@@ -1,0 +1,7 @@
+title,creator,type,year,tags,collection,status,holder,due,isbn,url,description
+Grid Systems in Graphic Design,Josef Muller-Brockmann,book,1981,"design; typography; reference",Design references,available,,,978-3721201451,/archive/books/grid-systems.pdf,Canonical text on modular layout
+The Elements of Typographic Style,Robert Bringhurst,book,1992,"design; typography",Design references,onloan,Mira Santos,2026-11-10,978-0881792124,,Requested for the workshop
+Barangay Boundaries of Quezon City 1939,Bureau of Lands,map,1939,"maps; districts",Local history,available,,,LOC-G3708,/archive/maps/qc-1939.tif,Digitised at 600 dpi
+Interview with Rosario A.,Oral History Team,audio,2023,"interviews; markets",Local history,onloan,J. de la Cruz,2026-11-03,,/archive/audio/rosario-a.wav,62-minute interview
+Water level log upstream gauge,Hydrology Dept.,dataset,2025,"hydrology; csv; public",Open datasets,available,,,,https://example.org/data/water-levels.csv,Hourly readings Jan-Dec
+Letterpress specimen book,Workshop Proofs,document,2019,"print; specimen",Design references,reference,,,,"Fragile binding, consult in studio"
