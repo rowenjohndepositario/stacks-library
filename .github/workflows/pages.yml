@@ -1,0 +1,40 @@
+name: Deploy to GitHub Pages
+
+# Publishes the site on every push to the default branch.
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sanity check the app is a single self-contained file
+        run: |
+          test -f index.html || { echo "index.html missing"; exit 1; }
+          if grep -Eq 'src="https?://|href="https?://[^"]*\.(css|js)' index.html; then
+            echo "index.html pulls in external assets; GitHub Pages will still serve it, but note it is no longer self-contained."
+          fi
+          echo "index.html size: $(wc -c < index.html) bytes"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
